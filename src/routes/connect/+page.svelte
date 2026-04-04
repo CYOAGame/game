@@ -77,9 +77,9 @@
 				goto('/login');
 				return;
 			}
-			const result = await forkRepo(tkn, 'journal-rpg', 'ironhaven');
+			const result = await forkRepo(tkn, 'CYOAGame', 'ironhaven');
 			if (!result) {
-				forkError = 'Template repo not found. Ask the admin to set up journal-rpg/ironhaven.';
+				forkError = 'Template repo not found. Ask the admin to set up CYOAGame/ironhaven.';
 				return;
 			}
 			await connectToRepo(result.owner, result.repo);
@@ -182,7 +182,7 @@
 		<section class="section">
 			<h2 class="section-title">Create World</h2>
 			<p class="section-desc">
-				Fork the <code>journal-rpg/ironhaven</code> template to your GitHub account and start fresh.
+				Fork the <code>CYOAGame/ironhaven</code> template to your GitHub account and start fresh.
 			</p>
 			{#if forkError}
 				<p class="error-msg">{forkError}</p>
