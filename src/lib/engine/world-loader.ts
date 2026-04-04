@@ -54,11 +54,43 @@ export function saveWorldState(state: WorldState): void {
 	localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function migrateRelationships(character: any): void {
+	if (!character.relationships) return;
+	for (const [targetId, value] of Object.entries(character.relationships)) {
+		if (typeof value === 'number') {
+			character.relationships[targetId] = {
+				tags: [],
+				axes: { affection: value }
+			};
+		}
+	}
+}
+
+function migrateLocation(location: any, startYear: number): void {
+	if (!location.builtDate) {
+		location.builtDate = { year: startYear, season: 'spring', day: 1 };
+	}
+}
+
 export function loadWorldState(): WorldState | null {
 	if (typeof localStorage === 'undefined') return null;
 	const raw = localStorage.getItem(STORAGE_KEY);
 	if (!raw) return null;
-	return JSON.parse(raw) as WorldState;
+	const state = JSON.parse(raw) as WorldState;
+
+	// Migrate old formats
+	for (const character of state.characters) {
+		migrateRelationships(character);
+	}
+	const startYear = state.config?.dateSystem?.startYear ?? 845;
+	for (const location of state.locations) {
+		migrateLocation(location, startYear);
+	}
+	if (!state.playedCharacterIds) {
+		(state as any).playedCharacterIds = [];
+	}
+
+	return state;
 }
 
 export function saveWorldBlocks(blocks: WorldBlocks): void {
