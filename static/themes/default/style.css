@@ -1,0 +1,14 @@
+:root {
+	--journal-bg: #f5e6c8;
+	--journal-text: #3a2a1a;
+	--journal-accent: #8b6914;
+	--journal-border: #c4a87a;
+	--journal-choice-bg: rgba(255, 255, 255, 0.3);
+	--journal-choice-hover: rgba(255, 255, 255, 0.5);
+	--journal-muted: rgba(58, 42, 26, 0.5);
+	--journal-font: Georgia, 'Times New Roman', serif;
+	--session-end-bg: #1a1a2e;
+	--session-end-text: #d4c5a0;
+	--session-end-card-bg: rgba(255, 255, 255, 0.05);
+	--session-end-border: #4a4a3a;
+}
