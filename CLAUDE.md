@@ -12,6 +12,13 @@
 
 A "Choose Your Own Adventure" style interactive fiction project. Details TBD as we design and build it together.
 
+## Environment
+
+Requires Node 22+. Uses nix flake from parent directory via direnv. Before running any commands:
+```bash
+eval "$(direnv export bash 2>/dev/null)"
+```
+
 ## Dev Commands
 
 ```bash
