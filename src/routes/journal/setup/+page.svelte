@@ -4,6 +4,8 @@
 	import { playSession } from '$lib/stores/session';
 	import { collapseAllRoles } from '$lib/engine/collapse';
 	import { selectEvent } from '$lib/engine/event-selector';
+	import { navigationContext } from '$lib/stores/navigation';
+	import { createWorldSnapshotAt } from '$lib/engine/timeline';
 	import type { Archetype } from '$lib/types/blocks';
 
 	const DAY_TYPE_OPTIONS = [
@@ -26,6 +28,15 @@
 		archetypes.find((a: Archetype) => a.id === selectedArchetypeId) ?? null
 	);
 
+	// Navigation context for pre-selected mode
+	let navCtx = $derived($navigationContext);
+	let isPreSelected = $derived(navCtx.mode === 'pre-selected');
+	let preSelectedCharacter = $derived(
+		isPreSelected && navCtx.characterId && state
+			? state.characters.find(c => c.id === navCtx.characterId) ?? null
+			: null
+	);
+
 	function toggleDayType(id: string) {
 		if (selectedDayTypes.includes(id)) {
 			selectedDayTypes = selectedDayTypes.filter(t => t !== id);
@@ -38,10 +49,79 @@
 		return key.charAt(0).toUpperCase() + key.slice(1);
 	}
 
+	function timeContextLabel(): string {
+		if (!navCtx.targetDate) return '';
+		const year = navCtx.targetDate.year;
+		const season = navCtx.targetDate.season.charAt(0).toUpperCase() + navCtx.targetDate.season.slice(1);
+		if (navCtx.timeContext === 'past') return `The Past — ${season}, Year ${year}`;
+		if (navCtx.timeContext === 'future') return `The Future — ${season}, Year ${year}`;
+		return `Year ${year}`;
+	}
+
+	function buildAndStartSession(
+		character: { id: string; archetypeId: string },
+		activeState: ReturnType<typeof $worldState> & {},
+		date: { year: number; season: string; day: number },
+		timeContext: 'past' | 'present' | 'future'
+	) {
+		if (!blocks || !activeState) return;
+
+		const event = selectEvent(
+			blocks.events,
+			activeState,
+			date.season,
+			selectedDayTypes,
+			blocks.questlines
+		);
+
+		if (!event) {
+			goto('/journal');
+			return;
+		}
+
+		const collapseResults = collapseAllRoles(
+			event.roles,
+			activeState.characters,
+			blocks.archetypes
+		);
+
+		for (const result of collapseResults) {
+			if (result.wasNewlyCreated && result.newCharacter) {
+				activeState.characters.push(result.newCharacter);
+			}
+		}
+
+		const collapsedRoles = collapseResults.map(r => ({
+			roleId: r.roleId,
+			characterId: r.characterId,
+			characterName: r.characterName,
+			wasNewlyCreated: r.wasNewlyCreated
+		}));
+
+		const session = {
+			characterId: character.id,
+			date,
+			eventTemplateId: event.id,
+			collapsedRoles,
+			currentNodeId: event.entryNodeId,
+			choiceLog: [],
+			exhaustion: 0,
+			maxExhaustion: 10,
+			isDead: false,
+			isComplete: false,
+			dayTypePreferences: selectedDayTypes,
+			timeContext
+		};
+
+		worldState.set(activeState);
+		playSession.set(session);
+		navigationContext.set({ mode: 'new', timeContext: 'present' });
+		goto('/journal');
+	}
+
 	function beginDay() {
 		if (!blocks || !state || !selectedArchetype) return;
 
-		// Create a character from the chosen archetype
 		const archetype = selectedArchetype;
 		const name = archetype.namingPatterns[Math.floor(Math.random() * archetype.namingPatterns.length)];
 		const id = `${name.toLowerCase()}_${archetype.id}_${Date.now()}`;
@@ -65,129 +145,156 @@
 			alive: true
 		};
 
-		// Add the character to world state
 		const newState = { ...state, characters: [...state.characters, character] };
 		worldState.set(newState);
 
-		// Select an event using day type preferences
 		const currentSeason = newState.config.dateSystem.seasons[0];
-		const event = selectEvent(
-			blocks.events,
-			newState,
-			currentSeason,
-			selectedDayTypes,
-			blocks.questlines
-		);
+		const date = { year: newState.config.dateSystem.startYear, season: currentSeason, day: 1 };
 
-		if (!event) {
-			// Fallback: just go to journal and let it handle it
-			goto('/journal');
-			return;
-		}
+		buildAndStartSession(character, newState, date, 'present');
+	}
 
-		// Collapse roles
-		const collapseResults = collapseAllRoles(
-			event.roles,
-			newState.characters,
-			blocks.archetypes
-		);
+	function beginPreSelected() {
+		if (!preSelectedCharacter || !state || !blocks) return;
 
-		// Add any newly created characters
-		for (const result of collapseResults) {
-			if (result.wasNewlyCreated && result.newCharacter) {
-				newState.characters.push(result.newCharacter);
+		let activeState = { ...state, characters: [...state.characters] };
+
+		let date: { year: number; season: string; day: number };
+		if (navCtx.targetDate) {
+			activeState = createWorldSnapshotAt(state, navCtx.targetDate, blocks.questlines);
+			// Ensure the pre-selected character is present in the snapshot (it may have been filtered)
+			const charInSnapshot = activeState.characters.find(c => c.id === preSelectedCharacter!.id);
+			if (!charInSnapshot) {
+				activeState = { ...activeState, characters: [...activeState.characters, preSelectedCharacter!] };
 			}
+			worldState.set(activeState);
+			date = navCtx.targetDate;
+		} else {
+			const currentSeason = activeState.config.dateSystem.seasons[0];
+			date = { year: activeState.config.dateSystem.startYear, season: currentSeason, day: 1 };
 		}
 
-		const collapsedRoles = collapseResults.map(r => ({
-			roleId: r.roleId,
-			characterId: r.characterId,
-			characterName: r.characterName,
-			wasNewlyCreated: r.wasNewlyCreated
-		}));
-
-		const session = {
-			characterId: character.id,
-			date: { year: newState.config.dateSystem.startYear, season: currentSeason, day: 1 },
-			eventTemplateId: event.id,
-			collapsedRoles,
-			currentNodeId: event.entryNodeId,
-			choiceLog: [],
-			exhaustion: 0,
-			maxExhaustion: 10,
-			isDead: false,
-			isComplete: false,
-			dayTypePreferences: selectedDayTypes,
-			timeContext: 'present'
-		};
-
-		worldState.set(newState);
-		playSession.set(session);
-		goto('/journal');
+		buildAndStartSession(preSelectedCharacter, activeState, date, navCtx.timeContext);
 	}
 </script>
 
 <div class="setup-page">
 	<div class="setup-inner">
-		<h1 class="setup-title">Begin a New Day</h1>
-		<p class="setup-subtitle">Choose who you are and what kind of day awaits.</p>
+		{#if isPreSelected && preSelectedCharacter}
+			<!-- Pre-selected character mode -->
+			<h1 class="setup-title">Continue the Story</h1>
+			<p class="setup-subtitle">Stepping back into a familiar life.</p>
 
-		<!-- Archetype selection -->
-		<section class="section">
-			<h2 class="section-label">Choose Your Role</h2>
-			<div class="archetype-grid">
-				{#each archetypes as archetype}
-					<button
-						class="archetype-card"
-						class:selected={selectedArchetypeId === archetype.id}
-						onclick={() => selectedArchetypeId = archetype.id}
-					>
-						<span class="archetype-name">{archetype.name}</span>
-						<div class="archetype-traits">
-							{#each Object.entries(archetype.traits) as [key, range]}
-								<span class="trait">{traitLabel(key)}: {range.min}-{range.max}</span>
-							{/each}
-						</div>
-						<div class="archetype-skills">
-							{#each archetype.skills as skill}
-								<span class="skill-tag">{skill}</span>
-							{/each}
-						</div>
-					</button>
-				{/each}
-			</div>
-		</section>
-
-		<!-- Day type preferences -->
-		<section class="section">
-			<h2 class="section-label">What Kind of Day?</h2>
-			<p class="section-hint">Select as many as you like, or none for a surprise.</p>
-			<div class="day-type-grid">
-				{#each DAY_TYPE_OPTIONS as option}
-					<button
-						class="day-type-btn"
-						class:active={selectedDayTypes.includes(option.id)}
-						onclick={() => toggleDayType(option.id)}
-					>
-						{option.label}
-					</button>
-				{/each}
-			</div>
-		</section>
-
-		<!-- Begin button -->
-		<div class="begin-section">
-			<button
-				class="begin-btn"
-				disabled={!selectedArchetypeId}
-				onclick={beginDay}
-			>
-				Begin the Day
-			</button>
-			{#if !selectedArchetypeId}
-				<p class="begin-hint">Choose a role to begin.</p>
+			{#if navCtx.targetDate}
+				<div class="time-context-badge">
+					{timeContextLabel()}
+				</div>
 			{/if}
-		</div>
+
+			<!-- Pre-selected character card -->
+			<section class="section">
+				<h2 class="section-label">Your Character</h2>
+				<div class="character-card selected">
+					<span class="archetype-name">{preSelectedCharacter.name}</span>
+					<span class="character-archetype">{preSelectedCharacter.archetypeId}</span>
+					<div class="archetype-traits">
+						{#each Object.entries(preSelectedCharacter.traits) as [key, value]}
+							<span class="trait">{traitLabel(key)}: {value}</span>
+						{/each}
+					</div>
+					<div class="archetype-skills">
+						{#each preSelectedCharacter.skills as skill}
+							<span class="skill-tag">{skill}</span>
+						{/each}
+					</div>
+				</div>
+			</section>
+
+			<!-- Day type preferences -->
+			<section class="section">
+				<h2 class="section-label">What Kind of Day?</h2>
+				<p class="section-hint">Select as many as you like, or none for a surprise.</p>
+				<div class="day-type-grid">
+					{#each DAY_TYPE_OPTIONS as option}
+						<button
+							class="day-type-btn"
+							class:active={selectedDayTypes.includes(option.id)}
+							onclick={() => toggleDayType(option.id)}
+						>
+							{option.label}
+						</button>
+					{/each}
+				</div>
+			</section>
+
+			<!-- Begin button -->
+			<div class="begin-section">
+				<button class="begin-btn" onclick={beginPreSelected}>
+					Begin the Day
+				</button>
+			</div>
+		{:else}
+			<!-- Default new character mode -->
+			<h1 class="setup-title">Begin a New Day</h1>
+			<p class="setup-subtitle">Choose who you are and what kind of day awaits.</p>
+
+			<!-- Archetype selection -->
+			<section class="section">
+				<h2 class="section-label">Choose Your Role</h2>
+				<div class="archetype-grid">
+					{#each archetypes as archetype}
+						<button
+							class="archetype-card"
+							class:selected={selectedArchetypeId === archetype.id}
+							onclick={() => selectedArchetypeId = archetype.id}
+						>
+							<span class="archetype-name">{archetype.name}</span>
+							<div class="archetype-traits">
+								{#each Object.entries(archetype.traits) as [key, range]}
+									<span class="trait">{traitLabel(key)}: {range.min}-{range.max}</span>
+								{/each}
+							</div>
+							<div class="archetype-skills">
+								{#each archetype.skills as skill}
+									<span class="skill-tag">{skill}</span>
+								{/each}
+							</div>
+						</button>
+					{/each}
+				</div>
+			</section>
+
+			<!-- Day type preferences -->
+			<section class="section">
+				<h2 class="section-label">What Kind of Day?</h2>
+				<p class="section-hint">Select as many as you like, or none for a surprise.</p>
+				<div class="day-type-grid">
+					{#each DAY_TYPE_OPTIONS as option}
+						<button
+							class="day-type-btn"
+							class:active={selectedDayTypes.includes(option.id)}
+							onclick={() => toggleDayType(option.id)}
+						>
+							{option.label}
+						</button>
+					{/each}
+				</div>
+			</section>
+
+			<!-- Begin button -->
+			<div class="begin-section">
+				<button
+					class="begin-btn"
+					disabled={!selectedArchetypeId}
+					onclick={beginDay}
+				>
+					Begin the Day
+				</button>
+				{#if !selectedArchetypeId}
+					<p class="begin-hint">Choose a role to begin.</p>
+				{/if}
+			</div>
+		{/if}
 
 		<a href="/" class="back-link">&larr; Back to menu</a>
 	</div>
@@ -227,6 +334,22 @@
 		margin-top: -1rem;
 	}
 
+	/* Time context badge */
+	.time-context-badge {
+		text-align: center;
+		font-size: 0.85rem;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--journal-accent);
+		opacity: 0.8;
+		padding: 0.4rem 1rem;
+		border: 1px solid rgba(139, 105, 20, 0.4);
+		border-radius: 20px;
+		background: rgba(139, 105, 20, 0.08);
+		align-self: center;
+		margin-top: -1rem;
+	}
+
 	.section {
 		display: flex;
 		flex-direction: column;
@@ -246,6 +369,27 @@
 		opacity: 0.5;
 		font-style: italic;
 		margin-top: -0.5rem;
+	}
+
+	/* Pre-selected character card */
+	.character-card {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		padding: 1rem 1.25rem;
+		background: rgba(139, 105, 20, 0.12);
+		border: 2px solid var(--journal-accent);
+		border-radius: 6px;
+		font-family: var(--journal-font);
+		color: var(--journal-text);
+		text-align: left;
+	}
+
+	.character-archetype {
+		font-size: 0.85rem;
+		opacity: 0.6;
+		text-transform: capitalize;
+		letter-spacing: 0.04em;
 	}
 
 	/* Archetype cards */
