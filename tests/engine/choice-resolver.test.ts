@@ -19,7 +19,8 @@ function createTestSession(): PlaySession {
 		maxExhaustion: 10,
 		isDead: false,
 		isComplete: false,
-		dayTypePreferences: ['action']
+		dayTypePreferences: ['action'],
+		timeContext: 'present'
 	};
 }
 

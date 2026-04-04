@@ -236,7 +236,8 @@
 			maxExhaustion: 10,
 			isDead: false,
 			isComplete: false,
-			dayTypePreferences: []
+			dayTypePreferences: [],
+			timeContext: 'present'
 		};
 
 		currentEventId = event.id;

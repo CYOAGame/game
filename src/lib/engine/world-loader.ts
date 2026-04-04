@@ -31,7 +31,8 @@ export function initializeWorldState(blocks: WorldBlocks): WorldState {
 	const locations: LocationInstance[] = blocks.locations.map(lt => ({
 		id: lt.id,
 		typeId: lt.id,
-		name: lt.name
+		name: lt.name,
+		builtDate: { year: blocks.config.dateSystem.startYear, season: blocks.config.dateSystem.seasons[0], day: 1 }
 	}));
 
 	return {
@@ -40,7 +41,8 @@ export function initializeWorldState(blocks: WorldBlocks): WorldState {
 		timeline: [],
 		factions,
 		questlineProgress,
-		locations
+		locations,
+		playedCharacterIds: []
 	};
 }
 

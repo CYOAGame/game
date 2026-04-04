@@ -24,13 +24,15 @@ export const allLocationTypes = [tavernType, marketType];
 export const tavernInstance: LocationInstance = {
 	id: 'rusty_flagon',
 	typeId: 'tavern',
-	name: 'The Rusty Flagon'
+	name: 'The Rusty Flagon',
+	builtDate: { year: 830, season: 'spring', day: 1 }
 };
 
 export const marketInstance: LocationInstance = {
 	id: 'market_square',
 	typeId: 'market_quarter',
-	name: 'Ironhaven Market Square'
+	name: 'Ironhaven Market Square',
+	builtDate: { year: 800, season: 'spring', day: 1 }
 };
 
 export const allLocationInstances = [tavernInstance, marketInstance];

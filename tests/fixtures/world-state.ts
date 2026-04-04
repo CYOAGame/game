@@ -46,7 +46,9 @@ export const marcusCharacter = {
 	skills: ['haggling', 'appraisal', 'navigation'],
 	locationId: 'market_square',
 	factions: { merchant_guild: 8 },
-	relationships: { elena_blacksmith: 2 },
+	relationships: {
+		elena_blacksmith: { tags: ['trade_partner'], axes: { affection: 2, trust: 3 } }
+	},
 	birthDate: { year: 818, season: 'autumn', day: 5 },
 	deathDate: null,
 	alive: true
@@ -63,6 +65,7 @@ export function createTestWorldState(): WorldState {
 			{ id: 'merchant_guild', mood: 7 }
 		],
 		questlineProgress: [{ ...demonInvasionProgress }],
-		locations: [...allLocationInstances]
+		locations: [...allLocationInstances],
+		playedCharacterIds: []
 	};
 }

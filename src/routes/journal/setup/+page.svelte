@@ -59,7 +59,7 @@
 			skills: [...archetype.skills],
 			locationId: '',
 			factions: {} as Record<string, number>,
-			relationships: {} as Record<string, number>,
+			relationships: {},
 			birthDate: { year: 800, season: 'spring', day: 1 },
 			deathDate: null,
 			alive: true
@@ -117,7 +117,8 @@
 			maxExhaustion: 10,
 			isDead: false,
 			isComplete: false,
-			dayTypePreferences: selectedDayTypes
+			dayTypePreferences: selectedDayTypes,
+			timeContext: 'present'
 		};
 
 		worldState.set(newState);
