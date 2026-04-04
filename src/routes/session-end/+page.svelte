@@ -9,7 +9,7 @@
 	import type { CharacterSuggestion } from '$lib/engine/timeline';
 	import { compareDates } from '$lib/types/state';
 	import { githubState } from '$lib/stores/github';
-	import { serializeWorldStateToFiles, commitFiles, queuePendingChanges } from '$lib/git/repo-writer';
+	import { serializeWorldStateToFiles, saveWithPR, queuePendingChanges } from '$lib/git/repo-writer';
 	import { formatJournalEntry, journalFilePath } from '$lib/git/journal-formatter';
 
 	// Derived from stores
@@ -129,7 +129,12 @@
 					stateFiles.set(journalPath, journalMd);
 				}
 				const commitMsg = `${currentCharacter?.name ?? 'Unknown'} — ${session?.date.season}, Day ${session?.date.day}, Year ${session?.date.year}`;
-				const result = await commitFiles(ghState.token, ghState.repoOwner, ghState.repoName, stateFiles, commitMsg);
+				const result = await saveWithPR(
+					ghState.token, ghState.repoOwner, ghState.repoName,
+					session.characterId,
+					currentCharacter?.name ?? 'Unknown',
+					stateFiles, commitMsg
+				);
 				if (result.success) {
 					githubState.update(s => ({ ...s, syncStatus: 'synced' }));
 				} else {
