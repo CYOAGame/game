@@ -74,7 +74,13 @@ function createWorldSnapshotAt(
 
 **Characters:** Only those alive at `targetDate` — born before the date, not dead before the date.
 
-**Locations:** ALL discovered locations are included regardless of when they were discovered. Soft consistency: a cave discovered in a future playthrough was always there. Once a location exists in the world state, it's available at every point in time. `LocationInstance` gains an optional `discoveredDate` field for tracking, but the snapshot function ignores it — once discovered, always available.
+**Locations:** Like characters, locations have lifespans. `LocationInstance` gains `builtDate` (when it was constructed/established) and optional `destroyedDate` (when it was ruined/abandoned). The snapshot includes only locations that existed at the target date (built before, not yet destroyed). 
+
+Two categories:
+- **Natural locations** (caves, rivers, forests) have a `builtDate` at the world's start year or earlier — they were always there. A cave discovered in a future playthrough can appear in past sessions because it always existed, it just wasn't known. Its `builtDate` is set to the world's start year on discovery.
+- **Constructed locations** (taverns, forts, shops) have a `builtDate` reflecting when they were built. A tavern built in year 830 doesn't exist in year 820. A fort destroyed in year 850 is ruins after that date.
+
+The `LocationType` block gains an optional `natural: boolean` flag (default false) to distinguish these categories. When the engine instantiates a natural location, it sets `builtDate` to the world's start year.
 
 **Questline stage:** Reconstructed by walking the timeline entries backward from the target date. Finds the last timeline entry before `targetDate` that affected a questline counter, and determines what stage would have been active. If no timeline entries exist before the target date, defaults to stage 0.
 
@@ -198,7 +204,11 @@ Event templates can use this for flavor — the text generator checks `timeConte
 - `'relationship_tag'` added to Consequence type union
 
 **`LocationInstance`** (state.ts):
-- Add optional `discoveredDate?: GameDate`
+- Add `builtDate: GameDate` (when location was constructed/established)
+- Add optional `destroyedDate?: GameDate` (when location was ruined/abandoned)
+
+**`LocationType`** (blocks.ts):
+- Add optional `natural?: boolean` (default false — natural locations like caves always existed)
 
 **`PlaySession`** (session.ts):
 - Add `timeContext: 'past' | 'present' | 'future'`
