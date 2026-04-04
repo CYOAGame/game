@@ -60,6 +60,26 @@ describe('collapseRole', () => {
 	});
 });
 
+describe('lineage creation', () => {
+	it('may link new character as child of dead character with same archetype', () => {
+		const world = createTestWorldState();
+		world.characters[0].alive = false;
+		world.characters[0].deathDate = { year: 840, season: 'summer', day: 1 };
+
+		const bystander = banditRaid.roles[1]; // archetypeFilter: merchant, blacksmith
+		const result = collapseRole(bystander, world.characters, allArchetypes, ['marcus_merchant']);
+
+		expect(result.wasNewlyCreated).toBe(true);
+		expect(result.newCharacter).toBeDefined();
+		// Lineage is probabilistic (30%), so just verify the character is valid
+		if (result.newCharacter?.parentId) {
+			expect(result.newCharacter.parentId).toBe('elena_blacksmith');
+			expect(result.newCharacter.relationships['elena_blacksmith']).toBeDefined();
+			expect(result.newCharacter.relationships['elena_blacksmith'].tags).toContain('family:parent');
+		}
+	});
+});
+
 describe('collapseAllRoles', () => {
 	it('fills all roles in an event template', () => {
 		const world = createTestWorldState();

@@ -31,7 +31,7 @@ function randomInRange(min: number, max: number): number {
 	return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function instantiateFromArchetype(archetypes: Archetype[], role: Role): { character: Character; name: string } {
+function instantiateFromArchetype(archetypes: Archetype[], role: Role, existingCharacters?: Character[]): { character: Character; name: string } {
 	let candidates = archetypes;
 	if (role.archetypeFilter) {
 		candidates = archetypes.filter(a => role.archetypeFilter!.includes(a.id));
@@ -70,6 +70,32 @@ function instantiateFromArchetype(archetypes: Archetype[], role: Role): { charac
 		alive: true
 	};
 
+	// Lineage: 30% chance to link as child of a dead character with same archetype
+	if (existingCharacters && Math.random() < 0.3) {
+		const deadAncestor = existingCharacters.find(
+			c => !c.alive && c.archetypeId === archetype.id
+		);
+		if (deadAncestor) {
+			character.parentId = deadAncestor.id;
+			character.relationships[deadAncestor.id] = {
+				tags: ['family:parent'],
+				axes: { affection: 5, respect: 3 }
+			};
+			for (const [trait, value] of Object.entries(deadAncestor.traits)) {
+				if (trait in character.traits) {
+					const offset = Math.floor(Math.random() * 5) - 2;
+					character.traits[trait] = Math.max(1, Math.min(10, value + offset));
+				}
+			}
+			const yearsAfter = 15 + Math.floor(Math.random() * 26);
+			character.birthDate = {
+				year: deadAncestor.birthDate.year + yearsAfter,
+				season: deadAncestor.birthDate.season,
+				day: deadAncestor.birthDate.day
+			};
+		}
+	}
+
 	return { character, name };
 }
 
@@ -93,7 +119,7 @@ export function collapseRole(
 		};
 	}
 
-	const { character, name } = instantiateFromArchetype(archetypes, role);
+	const { character, name } = instantiateFromArchetype(archetypes, role, characters);
 	return {
 		roleId: role.id,
 		characterId: character.id,
