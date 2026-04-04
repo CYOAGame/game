@@ -57,7 +57,10 @@ export const marcusCharacter = {
 export function createTestWorldState(): WorldState {
 	return {
 		config: testConfig,
-		characters: [elenaCharacter, marcusCharacter],
+		characters: [
+			{ ...elenaCharacter, relationships: { ...elenaCharacter.relationships } },
+			{ ...marcusCharacter, relationships: { ...marcusCharacter.relationships } }
+		],
 		timeline: [],
 		factions: [
 			{ id: 'town_guard', mood: 5 },
@@ -65,7 +68,7 @@ export function createTestWorldState(): WorldState {
 			{ id: 'merchant_guild', mood: 7 }
 		],
 		questlineProgress: [{ ...demonInvasionProgress }],
-		locations: [...allLocationInstances],
+		locations: allLocationInstances.map(l => ({ ...l })),
 		playedCharacterIds: []
 	};
 }
