@@ -3,6 +3,8 @@
 	import { playerPrefs, loadPlayerPrefs, savePlayerPrefs } from '$lib/stores/player';
 	import { enhanceText, type LLMContext } from '$lib/engine/llm-adapter';
 	import type { PlayerPrefs } from '$lib/stores/player';
+	import { githubState, saveGitHubState } from '$lib/stores/github';
+	import { commitFiles, getPendingChanges } from '$lib/git/repo-writer';
 
 	let prefs = $state<PlayerPrefs>({
 		dayTypePreferences: [],
@@ -67,6 +69,65 @@
 		playerPrefs.set(prefs);
 		saveStatus = 'saved';
 		setTimeout(() => { saveStatus = 'idle'; }, 2000);
+	}
+
+	// GitHub section
+	let ghState = $derived($githubState);
+	let syncNowStatus = $state<'idle' | 'syncing' | 'done' | 'error'>('idle');
+	let syncNowMessage = $state('');
+
+	async function handleSyncNow() {
+		syncNowStatus = 'syncing';
+		syncNowMessage = '';
+		try {
+			const pending = getPendingChanges();
+			if (pending.length === 0) {
+				syncNowStatus = 'done';
+				syncNowMessage = 'Nothing pending to sync.';
+				return;
+			}
+			for (const batch of pending) {
+				const files = new Map(Object.entries(batch.files));
+				const result = await commitFiles(ghState.token, ghState.repoOwner, ghState.repoName, files, batch.message);
+				if (!result.success) {
+					syncNowStatus = 'error';
+					syncNowMessage = result.error ?? 'Sync failed.';
+					return;
+				}
+			}
+			githubState.update(s => ({ ...s, syncStatus: 'synced' }));
+			syncNowStatus = 'done';
+			syncNowMessage = `Synced ${pending.length} pending ${pending.length === 1 ? 'batch' : 'batches'}.`;
+		} catch (err: any) {
+			syncNowStatus = 'error';
+			syncNowMessage = err?.message ?? 'Sync failed.';
+		}
+	}
+
+	function handleDisconnect() {
+		const current = loadPlayerPrefs();
+		savePlayerPrefs({ ...current, githubToken: undefined, githubUsername: undefined, repoOwner: undefined, repoName: undefined });
+		playerPrefs.update(p => ({ ...p, githubToken: undefined, githubUsername: undefined, repoOwner: undefined, repoName: undefined }));
+		githubState.set({
+			isAuthenticated: false,
+			username: '',
+			token: '',
+			repoOwner: '',
+			repoName: '',
+			isConnected: false,
+			syncStatus: 'idle',
+			pendingChanges: []
+		});
+		saveGitHubState({
+			isAuthenticated: false,
+			username: '',
+			token: '',
+			repoOwner: '',
+			repoName: '',
+			isConnected: false,
+			syncStatus: 'idle',
+			pendingChanges: []
+		});
 	}
 </script>
 
@@ -168,6 +229,54 @@
 				<p class="test-result test-success">{testMessage}</p>
 			{:else if testStatus === 'error'}
 				<p class="test-result test-error">{testMessage}</p>
+			{/if}
+		</section>
+
+		<!-- GitHub Connection Section -->
+		<section class="setting-section">
+			<h2 class="section-title">GitHub Connection</h2>
+			{#if ghState.isAuthenticated}
+				<div class="gh-info-row">
+					<span class="gh-label">Account</span>
+					<span class="gh-value">{ghState.username}</span>
+				</div>
+				{#if ghState.isConnected}
+					<div class="gh-info-row">
+						<span class="gh-label">World Repo</span>
+						<span class="gh-value gh-repo">{ghState.repoOwner}/{ghState.repoName}</span>
+					</div>
+					<div class="gh-info-row">
+						<span class="gh-label">Sync Status</span>
+						<span class="gh-value gh-sync-{ghState.syncStatus}">
+							{#if ghState.syncStatus === 'synced'}Synced
+							{:else if ghState.syncStatus === 'syncing'}Syncing...
+							{:else if ghState.syncStatus === 'pending'}Pending
+							{:else if ghState.syncStatus === 'error'}Error{#if ghState.syncError} — {ghState.syncError}{/if}
+							{:else}Idle{/if}
+						</span>
+					</div>
+				{/if}
+				<div class="gh-actions">
+					{#if ghState.isConnected}
+						<button
+							class="test-btn"
+							disabled={syncNowStatus === 'syncing'}
+							onclick={handleSyncNow}
+						>
+							{syncNowStatus === 'syncing' ? 'Syncing...' : 'Sync Now'}
+						</button>
+					{/if}
+					<button class="test-btn gh-disconnect-btn" onclick={handleDisconnect}>
+						Disconnect
+					</button>
+				</div>
+				{#if syncNowStatus === 'done'}
+					<p class="test-result test-success">{syncNowMessage}</p>
+				{:else if syncNowStatus === 'error'}
+					<p class="test-result test-error">{syncNowMessage}</p>
+				{/if}
+			{:else}
+				<p class="section-desc">Not connected. <a href="/login" class="gh-link">Login with GitHub</a> to sync your world.</p>
 			{/if}
 		</section>
 
@@ -397,5 +506,63 @@
 
 	.save-btn:hover {
 		opacity: 0.88;
+	}
+
+	/* GitHub section */
+	.gh-info-row {
+		display: flex;
+		align-items: baseline;
+		gap: 0.75rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.gh-label {
+		font-size: 0.78rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		opacity: 0.45;
+		min-width: 90px;
+	}
+
+	.gh-value {
+		font-size: 0.88rem;
+		opacity: 0.85;
+	}
+
+	.gh-repo {
+		font-family: monospace;
+		color: var(--journal-accent);
+	}
+
+	.gh-sync-synced { color: #8ecf8e; }
+	.gh-sync-syncing { color: #9ab8e8; }
+	.gh-sync-pending { color: #d4b96a; }
+	.gh-sync-error { color: #e09090; }
+	.gh-sync-idle { opacity: 0.5; }
+
+	.gh-actions {
+		display: flex;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+		margin-top: 0.5rem;
+	}
+
+	.gh-disconnect-btn {
+		color: #e09090;
+		border-color: rgba(180, 60, 60, 0.35);
+	}
+
+	.gh-disconnect-btn:hover:not(:disabled) {
+		border-color: rgba(180, 60, 60, 0.7);
+		opacity: 1;
+	}
+
+	.gh-link {
+		color: var(--journal-accent);
+		opacity: 0.9;
+	}
+
+	.gh-link:hover {
+		opacity: 1;
 	}
 </style>
