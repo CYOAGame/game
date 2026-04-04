@@ -1,0 +1,25 @@
+name: Ironhaven
+description: A medieval kingdom under the shadow of a rising demon lord.
+setting: medieval
+dateSystem:
+  seasons: [spring, summer, autumn, winter]
+  daysPerSeason: 30
+  startYear: 845
+startingFactions:
+  - id: town_guard
+    name: Town Guard
+    description: The local militia
+    initialMood: 5
+  - id: craftsmen_guild
+    name: "Craftsmen's Guild"
+    description: Artisans and makers
+    initialMood: 6
+  - id: merchant_guild
+    name: Merchant Guild
+    description: Traders and shopkeepers
+    initialMood: 7
+activeQuestlines:
+  - demon_invasion
+theme:
+  backgroundImage: themes/default/background.jpg
+  fontFamily: "Georgia, serif"

@@ -1,0 +1,11 @@
+id: merchant
+name: Traveling Merchant
+traits:
+  strength: { min: 2, max: 5 }
+  cunning: { min: 5, max: 9 }
+  charisma: { min: 6, max: 9 }
+skills: [haggling, appraisal, navigation]
+namingPatterns: [Marcus, Lydia, Fenwick, Asha]
+factions: [merchant_guild]
+locations: [market_quarter, docks, trade_road]
+activities: [counting coins, examining wares, consulting a ledger]

@@ -1,0 +1,11 @@
+id: soldier
+name: Soldier
+traits:
+  strength: { min: 6, max: 9 }
+  cunning: { min: 3, max: 6 }
+  charisma: { min: 2, max: 5 }
+skills: [swordsmanship, tactics, endurance]
+namingPatterns: [Aldric, Kira, Voss, Brenna]
+factions: [town_guard]
+locations: [barracks, town_gate, watchtower]
+activities: [polishing armor, drilling formations, standing watch]

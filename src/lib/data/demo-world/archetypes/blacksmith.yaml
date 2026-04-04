@@ -1,0 +1,11 @@
+id: blacksmith
+name: Blacksmith
+traits:
+  strength: { min: 5, max: 9 }
+  cunning: { min: 2, max: 5 }
+  charisma: { min: 3, max: 6 }
+skills: [forging, haggling]
+namingPatterns: [Elena, Bjorn, Thora, Garrick]
+factions: [craftsmen_guild]
+locations: [market_quarter, forge_district]
+activities: [hammering at the anvil, inspecting a blade, stoking the forge]
