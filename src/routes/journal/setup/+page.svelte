@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { playSession } from '$lib/stores/session';
 	import { collapseAllRoles } from '$lib/engine/collapse';
@@ -75,7 +76,7 @@
 		);
 
 		if (!event) {
-			goto('/journal');
+			goto(`${base}/journal`);
 			return;
 		}
 
@@ -117,7 +118,7 @@
 		worldState.set(activeState);
 		playSession.set(session);
 		navigationContext.set({ mode: 'new', timeContext: 'present' });
-		goto('/journal');
+		goto(`${base}/journal`);
 	}
 
 	function beginDay() {
@@ -297,7 +298,7 @@
 			</div>
 		{/if}
 
-		<a href="/" class="back-link">&larr; Back to menu</a>
+		<a href="{base}/" class="back-link">&larr; Back to menu</a>
 	</div>
 </div>
 

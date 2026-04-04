@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { base } from '$app/paths';
 	import { playerPrefs, loadPlayerPrefs, savePlayerPrefs } from '$lib/stores/player';
 	import { enhanceText, type LLMContext } from '$lib/engine/llm-adapter';
 	import type { PlayerPrefs } from '$lib/stores/player';
@@ -134,7 +135,7 @@
 <div class="settings-page">
 	<div class="settings-inner">
 		<header class="settings-header">
-			<a href="/" class="back-link">&larr; Back</a>
+			<a href="{base}/" class="back-link">&larr; Back</a>
 			<h1 class="settings-title">Settings</h1>
 		</header>
 
@@ -276,7 +277,7 @@
 					<p class="test-result test-error">{syncNowMessage}</p>
 				{/if}
 			{:else}
-				<p class="section-desc">Not connected. <a href="/login" class="gh-link">Login with GitHub</a> to sync your world.</p>
+				<p class="section-desc">Not connected. <a href="{base}/login" class="gh-link">Login with GitHub</a> to sync your world.</p>
 			{/if}
 		</section>
 

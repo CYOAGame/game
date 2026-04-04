@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import { validateToken } from '$lib/git/github-client';
 	import { playerPrefs, savePlayerPrefs, loadPlayerPrefs } from '$lib/stores/player';
@@ -54,7 +55,7 @@
 					syncStatus: 'idle',
 					pendingChanges: []
 				});
-				goto('/connect');
+				goto(`${base}/connect`);
 			} else {
 				errorMessage = 'Invalid token. Check your GitHub PAT and try again.';
 			}
@@ -125,7 +126,7 @@
 		</section>
 
 		<div class="footer-links">
-			<a href="/?offline=true" class="footer-link">Play Offline</a>
+			<a href="{base}/?offline=true" class="footer-link">Play Offline</a>
 		</div>
 	</div>
 </div>

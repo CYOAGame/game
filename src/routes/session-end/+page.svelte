@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { playSession } from '$lib/stores/session';
 	import { saveWorldState, loadWorldState } from '$lib/engine/world-loader';
@@ -141,7 +142,7 @@
 		}
 
 		playSession.set(null);
-		goto('/journal');
+		goto(`${base}/journal`);
 	}
 
 	function handleDiscardReplay() {
@@ -150,7 +151,7 @@
 			worldState.set(saved);
 		}
 		playSession.set(null);
-		goto('/journal');
+		goto(`${base}/journal`);
 	}
 
 	function handleDiscardMenu() {
@@ -159,7 +160,7 @@
 			worldState.set(saved);
 		}
 		playSession.set(null);
-		goto('/');
+		goto(`${base}/`);
 	}
 
 	function saveAndTrackCharacter() {
@@ -184,7 +185,7 @@
 			timeContext: 'past'
 		});
 		playSession.set(null);
-		goto('/journal/setup');
+		goto(`${base}/journal/setup`);
 	}
 
 	function handleFuture() {
@@ -199,7 +200,7 @@
 			timeContext: 'future'
 		});
 		playSession.set(null);
-		goto('/journal/setup');
+		goto(`${base}/journal/setup`);
 	}
 
 	function handleSomeoneElse() {
@@ -220,14 +221,14 @@
 			});
 		}
 		playSession.set(null);
-		goto('/journal/setup');
+		goto(`${base}/journal/setup`);
 	}
 </script>
 
 <div class="session-end-page">
 	<!-- Header -->
 	<header class="session-end-header">
-		<a href="/" class="back-link">← Home</a>
+		<a href="{base}/" class="back-link">← Home</a>
 		<h1 class="page-title">Journal Entry Complete</h1>
 		<div class="sync-badge-wrap">
 			{#if syncStatus === 'syncing'}

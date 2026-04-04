@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { base } from '$app/paths';
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { loadWorldState, loadWorldBlocks } from '$lib/engine/world-loader';
 	import { playerPrefs, loadPlayerPrefs } from '$lib/stores/player';
@@ -110,7 +111,7 @@
 <div class="inspector">
 	<header class="inspector-header">
 		<div class="header-left">
-			<a href="/" class="back-link">← Home</a>
+			<a href="{base}/" class="back-link">← Home</a>
 			<h1 class="inspector-title">World Inspector</h1>
 		</div>
 		<div class="header-actions">
@@ -127,7 +128,7 @@
 	{#if !ws}
 		<div class="empty-state">
 			<p>No world loaded.</p>
-			<a href="/" class="empty-link">Go to home to create or load a world.</a>
+			<a href="{base}/" class="empty-link">Go to home to create or load a world.</a>
 		</div>
 	{:else}
 

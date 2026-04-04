@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { playSession } from '$lib/stores/session';
 	import { resolveChoice, getAvailableChoices } from '$lib/engine/choice-resolver';
@@ -119,7 +120,7 @@
 			saveWorldState(updatedState);
 			const endSession = { ...currentSession, isComplete: true };
 			playSession.set(endSession);
-			goto('/session-end');
+			goto(`${base}/session-end`);
 			return;
 		}
 
@@ -192,7 +193,7 @@
 		const savedBlocks = $worldBlocks;
 
 		if (!savedState || !savedBlocks) {
-			goto('/');
+			goto(`${base}/`);
 			return;
 		}
 
@@ -372,7 +373,7 @@
 			saveWorldState(stateWithRecent);
 			const endSession = { ...newSession, isComplete: true };
 			playSession.set(endSession);
-			goto('/session-end');
+			goto(`${base}/session-end`);
 			return;
 		}
 
@@ -402,7 +403,7 @@
 		saveWorldState(updatedState);
 		const endSession = { ...session, isComplete: true };
 		playSession.set(endSession);
-		goto('/session-end');
+		goto(`${base}/session-end`);
 	}
 </script>
 
@@ -413,14 +414,14 @@
 {:else if errorMessage}
 	<div class="error-screen">
 		<p>{errorMessage}</p>
-		<button onclick={() => goto('/')}>Return Home</button>
+		<button onclick={() => goto(`${base}/`)}>Return Home</button>
 	</div>
 {:else}
 <div class="journal-page">
 	<!-- Header -->
 	<header class="journal-header">
 		<div class="header-left">
-			<a href="/" class="back-link">&larr; Home</a>
+			<a href="{base}/" class="back-link">&larr; Home</a>
 		</div>
 		<div class="header-center">
 			{#if session && state}
@@ -511,7 +512,7 @@
 				{:else}
 					<div class="session-complete">
 						<p>The day draws to a close...</p>
-						<button class="btn-end" onclick={() => goto('/session-end')}>
+						<button class="btn-end" onclick={() => goto(`${base}/session-end`)}>
 							See how the day went
 						</button>
 					</div>

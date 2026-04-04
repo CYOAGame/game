@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { initializeWorldState, loadWorldState, loadWorldBlocks, saveWorldState, saveWorldBlocks } from '$lib/engine/world-loader';
@@ -30,7 +31,7 @@
 				if (prefs.repoOwner && prefs.repoName) {
 					authMode = 'github-ready';
 				} else {
-					goto('/connect');
+					goto(`${base}/connect`);
 					return;
 				}
 			} else {
@@ -49,7 +50,7 @@
 	async function continueFromGitHub() {
 		const prefs = loadPlayerPrefs();
 		if (!prefs.githubToken || !prefs.repoOwner || !prefs.repoName) {
-			goto('/connect');
+			goto(`${base}/connect`);
 			return;
 		}
 		const cached = loadCachedFiles();
@@ -70,7 +71,7 @@
 			repoName: prefs.repoName!,
 			isConnected: true
 		}));
-		goto('/journal/setup');
+		goto(`${base}/journal/setup`);
 	}
 
 	function getDemoWorldBlocks(): WorldBlocks {
@@ -1627,7 +1628,7 @@
 		worldState.set(state);
 		saveWorldBlocks(blocks);
 		saveWorldState(state);
-		goto('/journal/setup');
+		goto(`${base}/journal/setup`);
 	}
 
 	function continueWorld() {
@@ -1636,7 +1637,7 @@
 		if (state && blocks) {
 			worldState.set(state);
 			worldBlocks.set(blocks);
-			goto('/journal/setup');
+			goto(`${base}/journal/setup`);
 		}
 	}
 </script>
@@ -1661,15 +1662,15 @@
 				<button class="btn btn-primary" onclick={continueFromGitHub}>
 					Continue World
 				</button>
-				<a href="/connect" class="btn btn-secondary">Switch World</a>
+				<a href="{base}/connect" class="btn btn-secondary">Switch World</a>
 			</div>
-			<a href="/settings" class="settings-link">Settings</a>
-			<a href="/timeline" class="settings-link">World Inspector</a>
+			<a href="{base}/settings" class="settings-link">Settings</a>
+			<a href="{base}/timeline" class="settings-link">World Inspector</a>
 
 		{:else if authMode === 'unauthenticated'}
 			<div class="actions">
-				<a href="/login" class="btn btn-primary">Login with GitHub</a>
-				<a href="/?offline=true" class="btn btn-secondary">Play Offline</a>
+				<a href="{base}/login" class="btn btn-primary">Login with GitHub</a>
+				<a href="{base}/?offline=true" class="btn btn-secondary">Play Offline</a>
 			</div>
 
 		{:else}
@@ -1685,8 +1686,8 @@
 				{/if}
 			</div>
 			<p class="world-name">World: Ironhaven</p>
-			<a href="/settings" class="settings-link">Settings</a>
-			<a href="/timeline" class="settings-link">World Inspector</a>
+			<a href="{base}/settings" class="settings-link">Settings</a>
+			<a href="{base}/timeline" class="settings-link">World Inspector</a>
 		{/if}
 	</div>
 </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { githubState, saveGitHubState } from '$lib/stores/github';
 	import { playerPrefs, savePlayerPrefs, loadPlayerPrefs } from '$lib/stores/player';
@@ -30,7 +31,7 @@
 	onMount(() => {
 		const prefs = loadPlayerPrefs();
 		if (!prefs.githubToken) {
-			goto('/login');
+			goto(`${base}/login`);
 			return;
 		}
 		if (prefs.repoOwner && prefs.repoName) {
@@ -43,7 +44,7 @@
 		const prefs = loadPlayerPrefs();
 		const tkn = prefs.githubToken ?? token;
 		if (!tkn) {
-			goto('/login');
+			goto(`${base}/login`);
 			return;
 		}
 		const files = await fetchRepoFiles(tkn, owner, repo);
@@ -64,7 +65,7 @@
 		const updatedPrefs = loadPlayerPrefs();
 		savePlayerPrefs({ ...updatedPrefs, repoOwner: owner, repoName: repo });
 		saveGitHubState($githubState);
-		goto('/journal/setup');
+		goto(`${base}/journal/setup`);
 	}
 
 	async function handleCreateWorld() {
@@ -74,7 +75,7 @@
 			const prefs = loadPlayerPrefs();
 			const tkn = prefs.githubToken ?? token;
 			if (!tkn) {
-				goto('/login');
+				goto(`${base}/login`);
 				return;
 			}
 			const result = await forkRepo(tkn, 'CYOAGame', 'ironhaven');
@@ -102,7 +103,7 @@
 			const prefs = loadPlayerPrefs();
 			const tkn = prefs.githubToken ?? token;
 			if (!tkn) {
-				goto('/login');
+				goto(`${base}/login`);
 				return;
 			}
 			const validation = await validateRepo(tkn, parsed.owner, parsed.repo);
@@ -143,7 +144,7 @@
 			syncStatus: 'idle',
 			pendingChanges: []
 		});
-		goto('/login');
+		goto(`${base}/login`);
 	}
 </script>
 
