@@ -6,6 +6,10 @@ export interface PlayerPrefs {
 	llmEndpoint?: string;
 	llmModel?: string;
 	llmApiKey?: string;
+	githubToken?: string;
+	githubUsername?: string;
+	repoOwner?: string;
+	repoName?: string;
 }
 
 const DEFAULT_PREFS: PlayerPrefs = {
