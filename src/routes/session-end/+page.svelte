@@ -1,8 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { worldState } from '$lib/stores/world';
+	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { playSession } from '$lib/stores/session';
 	import { saveWorldState, loadWorldState } from '$lib/engine/world-loader';
+	import { generatePastDate, generateFutureDate, suggestCharacters } from '$lib/engine/timeline';
+	import { navigationContext } from '$lib/stores/navigation';
+	import type { CharacterSuggestion } from '$lib/engine/timeline';
+	import { compareDates } from '$lib/types/state';
 
 	// Derived from stores
 	let session = $derived($playSession);
@@ -13,6 +17,20 @@
 	);
 
 	let choiceCount = $derived(session ? session.choiceLog.length : 0);
+
+	// Timeline navigation state
+	let showingSuggestions = $state(false);
+	let suggestions = $state<CharacterSuggestion[]>([]);
+
+	let canGoToPast = $derived(
+		session && currentCharacter && state
+			? compareDates(currentCharacter.birthDate, session.date, state.config.dateSystem.seasons) < 0
+			: false
+	);
+
+	let canGoToFuture = $derived(
+		session && currentCharacter ? currentCharacter.alive && !session.isDead : false
+	);
 
 	function formatFactionName(id: string): string {
 		const names: Record<string, string> = {
@@ -89,6 +107,67 @@
 		playSession.set(null);
 		goto('/');
 	}
+
+	function saveAndTrackCharacter() {
+		if (!state || !session) return;
+		if (!state.playedCharacterIds.includes(session.characterId)) {
+			const updated = { ...state, playedCharacterIds: [...state.playedCharacterIds, session.characterId] };
+			worldState.set(updated);
+			saveWorldState(updated);
+		} else {
+			saveWorldState(state);
+		}
+	}
+
+	function handlePast() {
+		if (!session || !currentCharacter || !state) return;
+		saveAndTrackCharacter();
+		const pastDate = generatePastDate(currentCharacter, session.date, state.config.dateSystem, state.timeline);
+		navigationContext.set({
+			mode: 'pre-selected',
+			characterId: session.characterId,
+			targetDate: pastDate,
+			timeContext: 'past'
+		});
+		playSession.set(null);
+		goto('/journal/setup');
+	}
+
+	function handleFuture() {
+		if (!session || !currentCharacter || !state) return;
+		saveAndTrackCharacter();
+		const futureDate = generateFutureDate(currentCharacter, session.date, state.config.dateSystem, state.timeline);
+		if (!futureDate) return;
+		navigationContext.set({
+			mode: 'pre-selected',
+			characterId: session.characterId,
+			targetDate: futureDate,
+			timeContext: 'future'
+		});
+		playSession.set(null);
+		goto('/journal/setup');
+	}
+
+	function handleSomeoneElse() {
+		if (!state || !session) return;
+		saveAndTrackCharacter();
+		suggestions = suggestCharacters(session.characterId, state, state.playedCharacterIds);
+		showingSuggestions = true;
+	}
+
+	function selectSuggestion(suggestion: CharacterSuggestion) {
+		if (suggestion.type === 'new') {
+			navigationContext.set({ mode: 'new', timeContext: 'present' });
+		} else {
+			navigationContext.set({
+				mode: 'pre-selected',
+				characterId: suggestion.characterId!,
+				timeContext: 'present'
+			});
+		}
+		playSession.set(null);
+		goto('/journal/setup');
+	}
 </script>
 
 <div class="session-end-page">
@@ -158,26 +237,52 @@
 
 			<div class="divider"></div>
 
-			<!-- Next entry: Phase 2 deferred buttons -->
+			<!-- Next entry: timeline navigation -->
 			<section class="actions-section next-entry-section">
-				<h3 class="section-label">
-					Next entry
-					<span class="coming-soon-note">— coming in Phase 2</span>
-				</h3>
-				<div class="action-buttons">
-					<button class="btn btn-next-entry" disabled>
-						<span class="btn-title">Past</span>
-						<span class="btn-sub">Revisit an earlier moment</span>
-					</button>
-					<button class="btn btn-next-entry" disabled>
-						<span class="btn-title">Future</span>
-						<span class="btn-sub">Jump forward in time</span>
-					</button>
-					<button class="btn btn-next-entry" disabled>
-						<span class="btn-title">Someone Else</span>
-						<span class="btn-sub">Play a different character</span>
-					</button>
-				</div>
+				<h3 class="section-label">Next entry</h3>
+				{#if showingSuggestions}
+					<div class="suggestions">
+						{#each suggestions as suggestion}
+							<button class="btn suggestion-card" onclick={() => selectSuggestion(suggestion)}>
+								<span class="btn-title">
+									{#if suggestion.type === 'new'}
+										Someone New
+									{:else}
+										{suggestion.characterName} — {suggestion.archetypeId}
+									{/if}
+								</span>
+								<span class="btn-sub">{suggestion.contextLine}</span>
+							</button>
+						{/each}
+					</div>
+				{:else}
+					<div class="action-buttons next-entry-buttons">
+						<button
+							class="btn btn-next-entry"
+							disabled={!canGoToPast}
+							onclick={handlePast}
+						>
+							<span class="btn-title">The Past</span>
+							<span class="btn-sub">Revisit an earlier moment</span>
+						</button>
+						<button
+							class="btn btn-next-entry"
+							disabled={!canGoToFuture}
+							onclick={handleFuture}
+						>
+							<span class="btn-title">The Future</span>
+							{#if session?.isDead || (currentCharacter && !currentCharacter.alive)}
+								<span class="btn-sub">This character's story has ended</span>
+							{:else}
+								<span class="btn-sub">Jump forward in time</span>
+							{/if}
+						</button>
+						<button class="btn btn-next-entry btn-someone-else" onclick={handleSomeoneElse}>
+							<span class="btn-title">Someone Else</span>
+							<span class="btn-sub">Play a different character</span>
+						</button>
+					</div>
+				{/if}
 			</section>
 		</div>
 	</main>
@@ -279,13 +384,6 @@
 		opacity: 0.45;
 		font-weight: normal;
 		margin-bottom: 0.6rem;
-	}
-
-	.coming-soon-note {
-		font-size: 0.7rem;
-		opacity: 0.6;
-		letter-spacing: 0.05em;
-		text-transform: none;
 	}
 
 	/* Summary */
@@ -425,8 +523,8 @@
 		opacity: 1;
 	}
 
-	/* Next entry — disabled state */
-	.next-entry-section .action-buttons {
+	/* Next entry buttons */
+	.next-entry-buttons {
 		flex-direction: row;
 		flex-wrap: wrap;
 	}
@@ -434,15 +532,35 @@
 	.btn-next-entry {
 		flex: 1;
 		min-width: 140px;
-		cursor: not-allowed;
-		opacity: 0.3;
 	}
 
 	.btn-next-entry:disabled {
 		opacity: 0.3;
+		cursor: not-allowed;
 		background: rgba(255, 255, 255, 0.02);
 		border-color: rgba(74, 74, 58, 0.4);
 		transform: none;
+	}
+
+	/* Someone else — always enabled */
+	.btn-someone-else {
+		opacity: 1;
+	}
+
+	/* Suggestions list */
+	.suggestions {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.suggestion-card {
+		border-color: rgba(139, 105, 20, 0.3);
+	}
+
+	.suggestion-card:hover {
+		border-color: var(--journal-accent) !important;
+		background: rgba(139, 105, 20, 0.08) !important;
 	}
 
 	/* Responsive */
@@ -451,7 +569,7 @@
 			padding: 1.75rem 1.25rem;
 		}
 
-		.next-entry-section .action-buttons {
+		.next-entry-buttons {
 			flex-direction: column;
 		}
 	}
