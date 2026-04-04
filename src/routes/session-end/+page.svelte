@@ -84,8 +84,32 @@
 	});
 
 	function handleSave() {
-		if (!state) return;
-		saveWorldState(state);
+		if (!state || !session) return;
+
+		// Create a timeline entry for this journal session
+		const allConsequences: Array<{ type: string; target: string; value: number | string | boolean }> = [];
+		for (const record of session.choiceLog) {
+			for (const c of record.consequences) {
+				allConsequences.push({ type: c.type, target: c.target, value: c.value });
+			}
+		}
+
+		const entry = {
+			id: `entry_${Date.now()}`,
+			date: session.date,
+			characterId: session.characterId,
+			eventTemplateId: session.eventTemplateId,
+			choicesMade: session.choiceLog.map(c => c.choiceId),
+			consequences: allConsequences,
+			summary: `${currentCharacter?.name ?? 'Unknown'} made ${session.choiceLog.length} ${session.choiceLog.length === 1 ? 'choice' : 'choices'}.${session.isDead ? ' They did not survive.' : ''}`
+		};
+
+		const updated = {
+			...state,
+			timeline: [...state.timeline, entry]
+		};
+		worldState.set(updated);
+		saveWorldState(updated);
 		playSession.set(null);
 		goto('/journal');
 	}
