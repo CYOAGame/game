@@ -100,10 +100,10 @@
 		const currentSeason = currentWorld.config.dateSystem.seasons[0];
 		const preferences = currentSession.dayTypePreferences ?? [];
 
-		// Try to exclude already-played events
+		// Only pick from events we haven't played this session — no repeats
 		const candidateEvents = blocks.events.filter(e => !playedEventIds.includes(e.id));
 		let event = selectEvent(
-			candidateEvents.length > 0 ? candidateEvents : blocks.events,
+			candidateEvents,
 			currentWorld,
 			currentSeason,
 			preferences,
@@ -111,7 +111,7 @@
 		);
 
 		if (!event) {
-			// No more events available: end the day — commit recent events to world state
+			// No more fresh events available: end the day
 			const updatedState = {
 				...currentWorld,
 				recentEventIds: [...(currentWorld.recentEventIds ?? []), ...playedEventIds].slice(-10)
