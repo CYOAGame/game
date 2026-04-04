@@ -119,6 +119,51 @@ describe('resolveChoice', () => {
 		expect(result.session.isComplete).toBe(false);
 	});
 
+	it('applies relationship consequence to specific axis', () => {
+		const world = createTestWorldState();
+		const session = createTestSession();
+		const choice = {
+			id: 'trust_choice', label: 'Build trust',
+			consequences: [
+				{ type: 'relationship' as const, target: 'marcus_merchant', value: 3, axis: 'trust' }
+			],
+			exhaustionCost: 1, nextNodeId: null
+		};
+		const result = resolveChoice(choice, session, world);
+		const elena = result.world.characters.find(c => c.id === 'elena_blacksmith')!;
+		expect(elena.relationships['marcus_merchant'].axes.trust).toBe(3);
+	});
+
+	it('defaults relationship axis to affection when unspecified', () => {
+		const world = createTestWorldState();
+		const session = createTestSession();
+		const choice = {
+			id: 'like_choice', label: 'Be nice',
+			consequences: [
+				{ type: 'relationship' as const, target: 'marcus_merchant', value: 2 }
+			],
+			exhaustionCost: 1, nextNodeId: null
+		};
+		const result = resolveChoice(choice, session, world);
+		const elena = result.world.characters.find(c => c.id === 'elena_blacksmith')!;
+		expect(elena.relationships['marcus_merchant'].axes.affection).toBe(2);
+	});
+
+	it('applies relationship_tag consequence', () => {
+		const world = createTestWorldState();
+		const session = createTestSession();
+		const choice = {
+			id: 'tag_choice', label: 'Befriend',
+			consequences: [
+				{ type: 'relationship_tag' as const, target: 'marcus_merchant', value: 'friend' }
+			],
+			exhaustionCost: 1, nextNodeId: null
+		};
+		const result = resolveChoice(choice, session, world);
+		const elena = result.world.characters.find(c => c.id === 'elena_blacksmith')!;
+		expect(elena.relationships['marcus_merchant'].tags).toContain('friend');
+	});
+
 	it('handles death consequence', () => {
 		const world = createTestWorldState();
 		const session = createTestSession();

@@ -80,7 +80,29 @@ function applyConsequence(
 					const role = session.collapsedRoles.find(r => r.roleId === roleMatch[1]);
 					if (role) targetId = role.characterId;
 				}
-				char.relationships[targetId] = (char.relationships[targetId] ?? 0) + consequence.value;
+				if (!char.relationships[targetId]) {
+					char.relationships[targetId] = { tags: [], axes: {} };
+				}
+				const axis = consequence.axis ?? 'affection';
+				char.relationships[targetId].axes[axis] = (char.relationships[targetId].axes[axis] ?? 0) + consequence.value;
+			}
+			break;
+		}
+		case 'relationship_tag': {
+			const char = world.characters.find(c => c.id === characterId);
+			if (char && typeof consequence.value === 'string') {
+				let targetId = consequence.target;
+				const roleMatch = targetId.match(/^\{(\w+)\.id\}$/);
+				if (roleMatch) {
+					const role = session.collapsedRoles.find(r => r.roleId === roleMatch[1]);
+					if (role) targetId = role.characterId;
+				}
+				if (!char.relationships[targetId]) {
+					char.relationships[targetId] = { tags: [], axes: {} };
+				}
+				if (!char.relationships[targetId].tags.includes(consequence.value)) {
+					char.relationships[targetId].tags.push(consequence.value);
+				}
 			}
 			break;
 		}
