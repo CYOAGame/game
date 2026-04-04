@@ -10,3 +10,7 @@ body {
 	font-family: var(--journal-font);
 	line-height: 1.6;
 }
+
+button, a.btn, .choice-btn {
+	min-height: 44px;
+}

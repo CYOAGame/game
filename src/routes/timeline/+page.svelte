@@ -1189,4 +1189,38 @@
 	.player-val {
 		opacity: 0.8;
 	}
+
+	@media (max-width: 480px) {
+		.inspector {
+			padding: 1rem 0.75rem;
+		}
+
+		.inspector-header {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+
+		.header-left {
+			flex-direction: column;
+			gap: 0.35rem;
+		}
+
+		.header-actions {
+			flex-wrap: wrap;
+		}
+
+		.character-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.location-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.facts-table {
+			display: block;
+			overflow-x: auto;
+			white-space: nowrap;
+		}
+	}
 </style>

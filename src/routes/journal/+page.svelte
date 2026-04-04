@@ -844,4 +844,28 @@
 	.btn-end:hover {
 		opacity: 0.9;
 	}
+
+	@media (max-width: 480px) {
+		.journal-header {
+			flex-wrap: wrap;
+			gap: 0.5rem;
+			padding: 0.5rem 1rem;
+		}
+
+		.header-left,
+		.header-right {
+			flex: none;
+		}
+
+		.header-center {
+			flex: none;
+			order: -1;
+			width: 100%;
+			text-align: center;
+		}
+
+		.parchment {
+			padding: 1.5rem 1.25rem;
+		}
+	}
 </style>

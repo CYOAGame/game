@@ -78,7 +78,7 @@
 		if (!session) return '';
 		if (session.isDead) return `${currentCharacter?.name ?? 'Your character'} did not survive the day.`;
 		if (choiceCount === 0) return 'The day passed quietly, without incident.';
-		return `${choiceCount} ${choiceCount === 1 ? 'choice' : 'choices'} were made this entry.`;
+		return `${choiceCount} ${choiceCount === 1 ? 'choice was' : 'choices were'} made this entry.`;
 	});
 
 	let dateDisplay = $derived((): string => {
@@ -676,6 +676,25 @@
 
 		.next-entry-buttons {
 			flex-direction: column;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.session-end-header {
+			flex-wrap: wrap;
+			gap: 0.25rem;
+			padding: 0.5rem 1rem;
+		}
+
+		.page-title {
+			flex: none;
+			width: 100%;
+			order: -1;
+			font-size: 0.85rem;
+		}
+
+		.entry-card {
+			padding: 1.5rem 1.25rem;
 		}
 	}
 </style>
