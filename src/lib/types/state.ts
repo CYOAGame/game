@@ -78,6 +78,8 @@ export interface WorldState {
 	questlineProgress: QuestlineProgress[];
 	locations: LocationInstance[];
 	playedCharacterIds: string[];
+	recentEventIds: string[];
+	worldFacts: Record<string, string | number | boolean>;
 }
 
 export interface LocationInstance {

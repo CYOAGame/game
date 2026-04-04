@@ -42,7 +42,9 @@ export function initializeWorldState(blocks: WorldBlocks): WorldState {
 		factions,
 		questlineProgress,
 		locations,
-		playedCharacterIds: []
+		playedCharacterIds: [],
+		recentEventIds: [],
+		worldFacts: {}
 	};
 }
 
@@ -88,6 +90,12 @@ export function loadWorldState(): WorldState | null {
 	}
 	if (!state.playedCharacterIds) {
 		(state as any).playedCharacterIds = [];
+	}
+	if (!state.recentEventIds) {
+		(state as any).recentEventIds = [];
+	}
+	if (!state.worldFacts) {
+		(state as any).worldFacts = {};
 	}
 
 	return state;

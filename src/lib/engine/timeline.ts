@@ -70,7 +70,9 @@ export function createWorldSnapshotAt(
 		factions,
 		questlineProgress,
 		locations,
-		playedCharacterIds: [...worldState.playedCharacterIds]
+		playedCharacterIds: [...worldState.playedCharacterIds],
+		recentEventIds: [...(worldState.recentEventIds ?? [])],
+		worldFacts: { ...(worldState.worldFacts ?? {}) }
 	};
 }
 

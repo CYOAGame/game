@@ -69,6 +69,8 @@ export function createTestWorldState(): WorldState {
 		],
 		questlineProgress: [{ ...demonInvasionProgress }],
 		locations: allLocationInstances.map(l => ({ ...l })),
-		playedCharacterIds: []
+		playedCharacterIds: [],
+		recentEventIds: [],
+		worldFacts: {}
 	};
 }

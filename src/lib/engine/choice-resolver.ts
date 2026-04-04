@@ -106,7 +106,13 @@ function applyConsequence(
 			}
 			break;
 		}
-		case 'world_fact': break; // Stored as timeline note
+		case 'world_fact': {
+			if (!world.worldFacts) {
+				(world as any).worldFacts = {};
+			}
+			world.worldFacts[consequence.target] = consequence.value;
+			break;
+		}
 		case 'death': {
 			const char = world.characters.find(c => c.id === characterId);
 			if (char) {

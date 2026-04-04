@@ -65,9 +65,9 @@ export interface EventTemplate {
 }
 
 export interface EventPrecondition {
-	type: 'questline_stage' | 'season' | 'location_type' | 'faction_mood' | 'tag';
+	type: 'questline_stage' | 'season' | 'location_type' | 'faction_mood' | 'tag' | 'relationship_axis' | 'relationship_tag' | 'world_fact';
 	key: string;
-	value: string | number;
+	value: string | number | boolean;
 	operator?: 'eq' | 'gte' | 'lte' | 'in';
 }
 

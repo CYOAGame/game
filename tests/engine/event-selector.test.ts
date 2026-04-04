@@ -31,6 +31,30 @@ describe('filterEvents', () => {
 		expect(filtered.map(e => e.id)).toContain('bandit_raid');
 		expect(filtered.map(e => e.id)).not.toContain('harvest_festival');
 	});
+
+	it('filters events by world_fact precondition', () => {
+		const world = createTestWorldState();
+		world.worldFacts = { traveler_hidden: true };
+		const followUpEvent = {
+			...banditRaid,
+			id: 'follow_up',
+			preconditions: [{ type: 'world_fact' as const, key: 'traveler_hidden', value: true }]
+		};
+		const filtered = filterEvents([followUpEvent, harvestFestival], world, 'autumn', allQuestlines);
+		expect(filtered.map(e => e.id)).toContain('follow_up');
+	});
+
+	it('filters events by world_fact precondition when fact is missing', () => {
+		const world = createTestWorldState();
+		world.worldFacts = {};
+		const followUpEvent = {
+			...banditRaid,
+			id: 'follow_up',
+			preconditions: [{ type: 'world_fact' as const, key: 'traveler_hidden', value: true }]
+		};
+		const filtered = filterEvents([followUpEvent], world, 'autumn', allQuestlines);
+		expect(filtered).toHaveLength(0);
+	});
 });
 
 describe('weightEvents', () => {
@@ -51,6 +75,13 @@ describe('weightEvents', () => {
 		for (const w of weighted) {
 			expect(w.weight).toBeGreaterThan(0);
 		}
+	});
+
+	it('deprioritizes recently seen events', () => {
+		const weighted = weightEvents([banditRaid, harvestFestival], [], ['bandit_raid']);
+		const raidWeight = weighted.find(w => w.event.id === 'bandit_raid')!.weight;
+		const festivalWeight = weighted.find(w => w.event.id === 'harvest_festival')!.weight;
+		expect(raidWeight).toBeLessThan(festivalWeight);
 	});
 });
 
