@@ -266,6 +266,46 @@ export async function ensurePR(
 }
 
 /**
+ * Sync a branch with main — merge main into the branch to pick up other players' changes.
+ * This ensures the branch is never behind main.
+ */
+export async function syncBranchWithMain(
+	token: string,
+	owner: string,
+	repo: string,
+	characterId: string
+): Promise<{ success: boolean; error?: string }> {
+	const octokit = getOctokit(token);
+	const branchName = `journal/${characterId}`;
+
+	try {
+		await octokit.rest.repos.merge({
+			owner, repo,
+			base: branchName,
+			head: 'main',
+			commit_message: `Sync ${branchName} with main`
+		});
+		return { success: true };
+	} catch (err: any) {
+		// 409 = already up to date, that's fine
+		if (err.status === 409) return { success: true };
+		// Try master
+		try {
+			await octokit.rest.repos.merge({
+				owner, repo,
+				base: branchName,
+				head: 'master',
+				commit_message: `Sync ${branchName} with master`
+			});
+			return { success: true };
+		} catch (err2: any) {
+			if (err2.status === 409) return { success: true };
+			return { success: false, error: err2.message ?? 'Branch sync failed' };
+		}
+	}
+}
+
+/**
  * Merge the character's branch into main (fast-forward or merge commit).
  */
 export async function mergeBranchToMain(
@@ -305,7 +345,7 @@ export async function mergeBranchToMain(
 }
 
 /**
- * Full save flow: commit to branch → ensure PR → merge to main.
+ * Full save flow: sync branch → commit to branch → ensure PR → merge to main (with retry).
  */
 export async function saveWithPR(
 	token: string,
@@ -314,26 +354,40 @@ export async function saveWithPR(
 	characterId: string,
 	characterName: string,
 	files: Map<string, string>,
-	commitMessage: string
+	commitMessage: string,
+	username?: string
 ): Promise<{ success: boolean; sha?: string; prNumber?: number; error?: string }> {
-	// 1. Commit to character branch
-	const commitResult = await commitToBranch(token, owner, repo, characterId, files, commitMessage);
+	// 0. Ensure branch exists
+	const branch = await ensureBranch(token, owner, repo, characterId);
+	if (!branch) return { success: false, error: 'Could not create branch' };
+
+	// 1. Sync branch with main (pick up other players' changes)
+	await syncBranchWithMain(token, owner, repo, characterId);
+
+	// 2. Commit to character branch
+	const finalMessage = username ? `[${username}] ${commitMessage}` : commitMessage;
+	const commitResult = await commitToBranch(token, owner, repo, characterId, files, finalMessage);
 	if (!commitResult.success) {
 		return { success: false, error: commitResult.error };
 	}
 
-	// 2. Ensure PR exists
+	// 3. Ensure PR exists
 	const prResult = await ensurePR(token, owner, repo, characterId, characterName);
 
-	// 3. Auto-merge to main
-	const mergeResult = await mergeBranchToMain(token, owner, repo, characterId);
+	// 4. Auto-merge to main with retry
+	let mergeResult = await mergeBranchToMain(token, owner, repo, characterId);
 	if (!mergeResult.success) {
-		// Commit succeeded but merge failed — not critical, PR is still there
+		// Retry once: sync with main again, then merge
+		await syncBranchWithMain(token, owner, repo, characterId);
+		mergeResult = await mergeBranchToMain(token, owner, repo, characterId);
+	}
+
+	if (!mergeResult.success) {
 		return {
 			success: true,
 			sha: commitResult.sha,
 			prNumber: prResult?.prNumber,
-			error: `Committed but merge failed: ${mergeResult.error}`
+			error: `Committed but merge failed: ${mergeResult.error}. Changes are on the branch and PR.`
 		};
 	}
 

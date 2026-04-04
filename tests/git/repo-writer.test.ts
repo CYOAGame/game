@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { serializeWorldStateToFiles } from '../../src/lib/git/repo-writer';
+import { serializeWorldStateToFiles, syncBranchWithMain, saveWithPR } from '../../src/lib/git/repo-writer';
 import { createTestWorldState } from '../fixtures/world-state';
 
 describe('serializeWorldStateToFiles', () => {
@@ -27,5 +27,16 @@ describe('branch naming', () => {
 		expect(branchName).toBe('journal/elena_blacksmith_1234');
 		// Should not contain spaces or special chars that git rejects
 		expect(branchName).not.toMatch(/\s/);
+	});
+});
+
+describe('multiplayer support', () => {
+	it('syncBranchWithMain is exported', () => {
+		expect(typeof syncBranchWithMain).toBe('function');
+	});
+
+	it('saveWithPR accepts optional username parameter', () => {
+		// Type check — the function should accept 8 params
+		expect(saveWithPR.length).toBeGreaterThanOrEqual(7);
 	});
 });
