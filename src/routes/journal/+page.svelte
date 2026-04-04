@@ -97,7 +97,13 @@
 		);
 
 		if (!event) {
-			// No more events available: end the day
+			// No more events available: end the day — commit recent events to world state
+			const updatedState = {
+				...currentWorld,
+				recentEventIds: [...(currentWorld.recentEventIds ?? []), ...playedEventIds].slice(-10)
+			};
+			worldState.set(updatedState);
+			saveWorldState(updatedState);
 			const endSession = { ...currentSession, isComplete: true };
 			playSession.set(endSession);
 			goto('/session-end');
@@ -292,6 +298,13 @@
 
 		// Check if session should end: dead or exhausted
 		if (newSession.isDead || newSession.exhaustion >= newSession.maxExhaustion) {
+			// Commit played events to recentEventIds before leaving
+			const stateWithRecent = {
+				...updatedWorld,
+				recentEventIds: [...(updatedWorld.recentEventIds ?? []), ...playedEventIds].slice(-10)
+			};
+			worldState.set(stateWithRecent);
+			saveWorldState(stateWithRecent);
 			const endSession = { ...newSession, isComplete: true };
 			playSession.set(endSession);
 			goto('/session-end');
@@ -314,7 +327,14 @@
 	}
 
 	function handleRest() {
-		if (!session) return;
+		if (!session || !state) return;
+		// Commit played events to recentEventIds before leaving
+		const updatedState = {
+			...state,
+			recentEventIds: [...(state.recentEventIds ?? []), ...playedEventIds].slice(-10)
+		};
+		worldState.set(updatedState);
+		saveWorldState(updatedState);
 		const endSession = { ...session, isComplete: true };
 		playSession.set(endSession);
 		goto('/session-end');
