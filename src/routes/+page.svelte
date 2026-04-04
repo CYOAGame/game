@@ -130,7 +130,7 @@
 									id: 'help_bystander',
 									label: 'Grab {bystander.name} and pull them to safety',
 									consequences: [
-										{ type: 'relationship', target: '{bystander.id}', value: 3 },
+										{ type: 'relationship', target: '{bystander.id}', value: 3, axis: 'trust' },
 										{ type: 'faction', target: 'town_guard', value: 1 }
 									],
 									exhaustionCost: 2,
@@ -188,7 +188,7 @@
 									id: 'comfort',
 									label: 'Stay with them until it passes',
 									consequences: [
-										{ type: 'relationship', target: '{bystander.id}', value: 2 },
+										{ type: 'relationship', target: '{bystander.id}', value: 2, axis: 'affection' },
 										{ type: 'stat', target: 'charisma', value: 1 }
 									],
 									exhaustionCost: 1,
@@ -446,7 +446,7 @@
 									id: 'offer_help',
 									label: 'Offer to help carry their water back',
 									consequences: [
-										{ type: 'relationship', target: '{neighbor.id}', value: 2 },
+										{ type: 'relationship', target: '{neighbor.id}', value: 2, axis: 'trust' },
 										{ type: 'faction', target: 'village_folk', value: 1 }
 									],
 									exhaustionCost: 1,
@@ -462,7 +462,7 @@
 									id: 'go_down',
 									label: 'Go see what they need',
 									consequences: [
-										{ type: 'relationship', target: '{neighbor.id}', value: 1 },
+										{ type: 'relationship', target: '{neighbor.id}', value: 1, axis: 'affection' },
 										{ type: 'stat', target: 'charisma', value: 1 }
 									],
 									exhaustionCost: 1,
@@ -595,7 +595,7 @@
 									label: 'Offer them water and a seat',
 									consequences: [
 										{ type: 'stat', target: 'charisma', value: 1 },
-										{ type: 'relationship', target: '{traveler.id}', value: 2 }
+										{ type: 'relationship', target: '{traveler.id}', value: 2, axis: 'trust' }
 									],
 									exhaustionCost: 1,
 									nextNodeId: 'traveler_story'
@@ -619,7 +619,7 @@
 									id: 'offer_shelter',
 									label: 'Offer to let them stay and rest safely',
 									consequences: [
-										{ type: 'relationship', target: '{traveler.id}', value: 3 },
+										{ type: 'relationship', target: '{traveler.id}', value: 3, axis: 'affection' },
 										{ type: 'faction', target: 'village_folk', value: 1 }
 									],
 									exhaustionCost: 1,
@@ -645,7 +645,7 @@
 									label: 'Soften and offer to help after all',
 									consequences: [
 										{ type: 'stat', target: 'charisma', value: 1 },
-										{ type: 'relationship', target: '{traveler.id}', value: 1 }
+										{ type: 'relationship', target: '{traveler.id}', value: 1, axis: 'trust' }
 									],
 									exhaustionCost: 1,
 									nextNodeId: null
