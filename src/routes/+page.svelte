@@ -1,16 +1,77 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { initializeWorldState, loadWorldState, loadWorldBlocks, saveWorldState, saveWorldBlocks } from '$lib/engine/world-loader';
 	import type { WorldBlocks } from '$lib/engine/world-loader';
+	import { playerPrefs, loadPlayerPrefs, savePlayerPrefs } from '$lib/stores/player';
+	import { githubState } from '$lib/stores/github';
+	import { validateToken } from '$lib/git/github-client';
+	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles, loadCachedFiles } from '$lib/git/yaml-loader';
 	import { onMount } from 'svelte';
 
+	// Auth states
+	let authMode = $state<'loading' | 'github-ready' | 'unauthenticated' | 'offline'>('loading');
 	let hasSavedWorld = $state(false);
 
-	onMount(() => {
-		const saved = loadWorldState();
-		hasSavedWorld = saved !== null;
+	onMount(async () => {
+		// Check for ?offline=true
+		const isOffline = page.url.searchParams.get('offline') === 'true';
+		if (isOffline) {
+			authMode = 'offline';
+			hasSavedWorld = loadWorldState() !== null;
+			return;
+		}
+
+		const prefs = loadPlayerPrefs();
+		if (prefs.githubToken) {
+			const result = await validateToken(prefs.githubToken);
+			if (result.valid) {
+				if (prefs.repoOwner && prefs.repoName) {
+					authMode = 'github-ready';
+				} else {
+					goto('/connect');
+					return;
+				}
+			} else {
+				// Token invalid — clear it
+				savePlayerPrefs({ ...prefs, githubToken: undefined, githubUsername: undefined });
+				playerPrefs.update(p => ({ ...p, githubToken: undefined, githubUsername: undefined }));
+				authMode = 'unauthenticated';
+			}
+		} else {
+			authMode = 'unauthenticated';
+		}
+
+		hasSavedWorld = loadWorldState() !== null;
 	});
+
+	async function continueFromGitHub() {
+		const prefs = loadPlayerPrefs();
+		if (!prefs.githubToken || !prefs.repoOwner || !prefs.repoName) {
+			goto('/connect');
+			return;
+		}
+		const cached = loadCachedFiles();
+		const files = cached ?? await fetchRepoFiles(prefs.githubToken, prefs.repoOwner, prefs.repoName);
+		if (!cached && files.size > 0) cacheFiles(files);
+		const blocks = buildWorldBlocksFromFiles(files);
+		const state = buildWorldStateFromFiles(files, blocks.config);
+		worldBlocks.set(blocks);
+		worldState.set(state);
+		saveWorldBlocks(blocks);
+		saveWorldState(state);
+		githubState.update(s => ({
+			...s,
+			isAuthenticated: true,
+			username: prefs.githubUsername ?? '',
+			token: prefs.githubToken!,
+			repoOwner: prefs.repoOwner!,
+			repoName: prefs.repoName!,
+			isConnected: true
+		}));
+		goto('/journal/setup');
+	}
 
 	function getDemoWorldBlocks(): WorldBlocks {
 		return {
@@ -1589,19 +1650,44 @@
 			shaped by your choices. Events unfold around you. Questlines rise and fall. No hero's
 			journey — just ordinary lives in extraordinary times.
 		</p>
-		<div class="actions">
-			<button class="btn btn-primary" onclick={startNewWorld}>
-				Start New World
-			</button>
-			{#if hasSavedWorld}
-				<button class="btn btn-secondary" onclick={continueWorld}>
+
+		{#if authMode === 'loading'}
+			<div class="actions">
+				<span class="loading-text">Loading...</span>
+			</div>
+
+		{:else if authMode === 'github-ready'}
+			<div class="actions">
+				<button class="btn btn-primary" onclick={continueFromGitHub}>
 					Continue World
 				</button>
-			{/if}
-		</div>
-		<p class="world-name">World: Ironhaven</p>
-		<a href="/settings" class="settings-link">Settings</a>
-		<a href="/timeline" class="settings-link">World Inspector</a>
+				<a href="/connect" class="btn btn-secondary">Switch World</a>
+			</div>
+			<a href="/settings" class="settings-link">Settings</a>
+			<a href="/timeline" class="settings-link">World Inspector</a>
+
+		{:else if authMode === 'unauthenticated'}
+			<div class="actions">
+				<a href="/login" class="btn btn-primary">Login with GitHub</a>
+				<a href="/?offline=true" class="btn btn-secondary">Play Offline</a>
+			</div>
+
+		{:else}
+			<!-- offline mode -->
+			<div class="actions">
+				<button class="btn btn-primary" onclick={startNewWorld}>
+					Start New World
+				</button>
+				{#if hasSavedWorld}
+					<button class="btn btn-secondary" onclick={continueWorld}>
+						Continue World
+					</button>
+				{/if}
+			</div>
+			<p class="world-name">World: Ironhaven</p>
+			<a href="/settings" class="settings-link">Settings</a>
+			<a href="/timeline" class="settings-link">World Inspector</a>
+		{/if}
 	</div>
 </div>
 
@@ -1710,5 +1796,12 @@
 
 	.settings-link:hover {
 		opacity: 0.7;
+	}
+
+	.loading-text {
+		font-size: 0.9rem;
+		opacity: 0.4;
+		font-style: italic;
+		letter-spacing: 0.05em;
 	}
 </style>

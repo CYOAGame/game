@@ -7,10 +7,14 @@
 	import { navigationContext } from '$lib/stores/navigation';
 	import type { CharacterSuggestion } from '$lib/engine/timeline';
 	import { compareDates } from '$lib/types/state';
+	import { githubState } from '$lib/stores/github';
+	import { serializeWorldStateToFiles, commitFiles, queuePendingChanges } from '$lib/git/repo-writer';
+	import { formatJournalEntry, journalFilePath } from '$lib/git/journal-formatter';
 
 	// Derived from stores
 	let session = $derived($playSession);
 	let state = $derived($worldState);
+	let syncStatus = $derived($githubState.syncStatus);
 
 	let currentCharacter = $derived(
 		session && state ? state.characters.find(c => c.id === session!.characterId) ?? null : null
@@ -83,7 +87,7 @@
 		return `${seasonCapitalized}, Year ${session.date.year}, Day ${session.date.day}`;
 	});
 
-	function handleSave() {
+	async function handleSave() {
 		if (!state || !session) return;
 
 		// Create a timeline entry for this journal session
@@ -110,6 +114,32 @@
 		};
 		worldState.set(updated);
 		saveWorldState(updated);
+
+		// If GitHub is connected, push to repo
+		const ghState = $githubState;
+		if (ghState.isConnected && ghState.token) {
+			githubState.update(s => ({ ...s, syncStatus: 'syncing' }));
+			try {
+				const stateFiles = serializeWorldStateToFiles(updated);
+				// Add journal entry
+				if (currentCharacter && session) {
+					const journalMd = formatJournalEntry(currentCharacter, session.date, session.choiceLog, session.isDead);
+					const journalPath = journalFilePath(currentCharacter, session.date);
+					stateFiles.set(journalPath, journalMd);
+				}
+				const commitMsg = `${currentCharacter?.name ?? 'Unknown'} — ${session?.date.season}, Day ${session?.date.day}, Year ${session?.date.year}`;
+				const result = await commitFiles(ghState.token, ghState.repoOwner, ghState.repoName, stateFiles, commitMsg);
+				if (result.success) {
+					githubState.update(s => ({ ...s, syncStatus: 'synced' }));
+				} else {
+					queuePendingChanges(stateFiles, commitMsg);
+					githubState.update(s => ({ ...s, syncStatus: 'pending', syncError: result.error }));
+				}
+			} catch (err: any) {
+				githubState.update(s => ({ ...s, syncStatus: 'error', syncError: err.message }));
+			}
+		}
+
 		playSession.set(null);
 		goto('/journal');
 	}
@@ -199,7 +229,17 @@
 	<header class="session-end-header">
 		<a href="/" class="back-link">← Home</a>
 		<h1 class="page-title">Journal Entry Complete</h1>
-		<span class="spacer"></span>
+		<div class="sync-badge-wrap">
+			{#if syncStatus === 'syncing'}
+				<span class="sync-badge sync-syncing">Syncing...</span>
+			{:else if syncStatus === 'synced'}
+				<span class="sync-badge sync-synced">Synced</span>
+			{:else if syncStatus === 'pending'}
+				<span class="sync-badge sync-pending">Pending</span>
+			{:else if syncStatus === 'error'}
+				<span class="sync-badge sync-error">Sync Error</span>
+			{/if}
+		</div>
 	</header>
 
 	<!-- Main content -->
@@ -355,8 +395,43 @@
 		flex: 2;
 	}
 
-	.spacer {
+	.sync-badge-wrap {
 		flex: 1;
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	.sync-badge {
+		font-size: 0.72rem;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		padding: 0.2rem 0.55rem;
+		border-radius: 3px;
+		border: 1px solid transparent;
+	}
+
+	.sync-syncing {
+		color: #9ab8e8;
+		border-color: rgba(90, 140, 210, 0.4);
+		background: rgba(90, 140, 210, 0.1);
+	}
+
+	.sync-synced {
+		color: #8ecf8e;
+		border-color: rgba(80, 160, 80, 0.4);
+		background: rgba(80, 160, 80, 0.1);
+	}
+
+	.sync-pending {
+		color: #d4b96a;
+		border-color: rgba(180, 140, 60, 0.4);
+		background: rgba(180, 140, 60, 0.1);
+	}
+
+	.sync-error {
+		color: #e09090;
+		border-color: rgba(180, 60, 60, 0.4);
+		background: rgba(180, 60, 60, 0.1);
 	}
 
 	/* Main area */
