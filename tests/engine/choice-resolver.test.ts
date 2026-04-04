@@ -108,13 +108,14 @@ describe('resolveChoice', () => {
 		expect(result.session.currentNodeId).toBe('fight_result');
 	});
 
-	it('marks session complete when nextNodeId is null', () => {
+	it('does not mark session complete when nextNodeId is null (event chaining handles this)', () => {
 		const world = createTestWorldState();
 		const session = createTestSession();
 		session.currentNodeId = 'hide_result';
 		const emergeChoice = banditRaid.nodes.hide_result.choices[0]; // nextNodeId: null
 		const result = resolveChoice(emergeChoice, session, world);
-		expect(result.session.isComplete).toBe(true);
+		// Session completion is now handled by the UI layer for event chaining
+		expect(result.session.isComplete).toBe(false);
 	});
 
 	it('handles death consequence', () => {
