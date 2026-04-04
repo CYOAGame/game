@@ -133,7 +133,8 @@
 					ghState.token, ghState.repoOwner, ghState.repoName,
 					session.characterId,
 					currentCharacter?.name ?? 'Unknown',
-					stateFiles, commitMsg
+					stateFiles, commitMsg,
+					ghState.username
 				);
 				if (result.success) {
 					githubState.update(s => ({ ...s, syncStatus: 'synced' }));

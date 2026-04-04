@@ -8,6 +8,9 @@
 	import { navigationContext } from '$lib/stores/navigation';
 	import { createWorldSnapshotAt } from '$lib/engine/timeline';
 	import type { Archetype } from '$lib/types/blocks';
+	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles } from '$lib/git/yaml-loader';
+	import { saveWorldBlocks, saveWorldState } from '$lib/engine/world-loader';
+	import { githubState } from '$lib/stores/github';
 
 	const DAY_TYPE_OPTIONS = [
 		{ id: 'action', label: 'Action' },
@@ -119,6 +122,27 @@
 		playSession.set(session);
 		navigationContext.set({ mode: 'new', timeContext: 'present' });
 		goto(`${base}/journal`);
+	}
+
+	let refreshing = $state(false);
+
+	async function refreshFromRepo() {
+		const ghState = $githubState;
+		if (!ghState.isConnected || !ghState.token) return;
+		refreshing = true;
+		try {
+			const files = await fetchRepoFiles(ghState.token, ghState.repoOwner, ghState.repoName);
+			const blocks = buildWorldBlocksFromFiles(files);
+			const state = buildWorldStateFromFiles(files, blocks.config);
+			cacheFiles(files);
+			worldBlocks.set(blocks);
+			worldState.set(state);
+			saveWorldBlocks(blocks);
+			saveWorldState(state);
+		} catch {
+			// silently fail — use cached data
+		}
+		refreshing = false;
 	}
 
 	function beginDay() {
@@ -234,6 +258,11 @@
 				<button class="begin-btn" onclick={beginPreSelected}>
 					Begin the Day
 				</button>
+				{#if $githubState.isConnected}
+					<button class="refresh-link" onclick={refreshFromRepo} disabled={refreshing}>
+						{refreshing ? 'Refreshing...' : 'Refresh world from repo'}
+					</button>
+				{/if}
 			</div>
 		{:else}
 			<!-- Default new character mode -->
@@ -294,6 +323,11 @@
 				</button>
 				{#if !selectedArchetypeId}
 					<p class="begin-hint">Choose a role to begin.</p>
+				{/if}
+				{#if $githubState.isConnected}
+					<button class="refresh-link" onclick={refreshFromRepo} disabled={refreshing}>
+						{refreshing ? 'Refreshing...' : 'Refresh world from repo'}
+					</button>
 				{/if}
 			</div>
 		{/if}
@@ -539,5 +573,27 @@
 
 	.back-link:hover {
 		opacity: 1;
+	}
+
+	.refresh-link {
+		background: none;
+		border: none;
+		color: var(--journal-text);
+		font-family: var(--journal-font);
+		font-size: 0.78rem;
+		opacity: 0.4;
+		cursor: pointer;
+		padding: 0.2rem 0.5rem;
+		transition: opacity 0.15s;
+		letter-spacing: 0.03em;
+	}
+
+	.refresh-link:hover:not(:disabled) {
+		opacity: 0.7;
+	}
+
+	.refresh-link:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
 	}
 </style>
