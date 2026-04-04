@@ -58,9 +58,20 @@
 			goto(`${base}/connect`);
 			return;
 		}
-		const cached = loadCachedFiles();
-		const files = cached ?? await fetchRepoFiles(prefs.githubToken, prefs.repoOwner, prefs.repoName);
-		if (!cached && files.size > 0) cacheFiles(files);
+		// Always fetch fresh from repo (cache may be stale after upstream sync)
+		let files: Map<string, string>;
+		try {
+			files = await fetchRepoFiles(prefs.githubToken, prefs.repoOwner, prefs.repoName);
+			cacheFiles(files);
+		} catch {
+			// Offline fallback — use cache
+			const cached = loadCachedFiles();
+			if (!cached) {
+				goto(`${base}/connect`);
+				return;
+			}
+			files = cached;
+		}
 		const blocks = buildWorldBlocksFromFiles(files);
 		const state = buildWorldStateFromFiles(files, blocks.config);
 		worldBlocks.set(blocks);
