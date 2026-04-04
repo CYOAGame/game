@@ -29,6 +29,7 @@ export interface PlaySession {
 	isDead: boolean;
 	isComplete: boolean;
 	dayTypePreferences: string[];
+	timeContext: 'past' | 'present' | 'future';
 }
 
 export type SessionOutcome = 'save' | 'discard' | 'replay';

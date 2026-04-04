@@ -47,9 +47,10 @@ export interface ChoicePrecondition {
 }
 
 export interface Consequence {
-	type: 'stat' | 'faction' | 'questline' | 'world_fact' | 'relationship' | 'death' | 'exhaustion';
+	type: 'stat' | 'faction' | 'questline' | 'world_fact' | 'relationship' | 'relationship_tag' | 'death' | 'exhaustion';
 	target: string;
 	value: number | string | boolean;
+	axis?: string;
 }
 
 /** A thing that can happen — "bandit raid", "harvest festival" */
@@ -78,6 +79,7 @@ export interface LocationType {
 	eventTags: string[];
 	archetypeIds: string[];
 	flavorTexts: string[];
+	natural?: boolean;
 }
 
 /** A questline stage */
