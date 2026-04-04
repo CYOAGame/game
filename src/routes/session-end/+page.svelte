@@ -14,14 +14,38 @@
 
 	let choiceCount = $derived(session ? session.choiceLog.length : 0);
 
+	function formatFactionName(id: string): string {
+		const names: Record<string, string> = {
+			town_guard: 'Town Guard',
+			craftsmen_guild: "Craftsmen's Guild",
+			merchant_guild: 'Merchant Guild',
+			village_folk: 'Village Folk'
+		};
+		return names[id] ?? id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+	}
+
+	function formatStatName(id: string): string {
+		return id.charAt(0).toUpperCase() + id.slice(1);
+	}
+
 	let choiceTags = $derived((): string[] => {
 		if (!session || session.choiceLog.length === 0) return [];
 		const tags = new Set<string>();
 		for (const record of session.choiceLog) {
 			for (const consequence of record.consequences) {
-				if (consequence.type === 'faction') tags.add(`faction: ${consequence.target}`);
-				if (consequence.type === 'stat') tags.add(`${consequence.target} +${consequence.value}`);
-				if (consequence.type === 'questline') tags.add('questline');
+				if (consequence.type === 'faction') {
+					tags.add(`${formatFactionName(consequence.target)} reputation`);
+				}
+				if (consequence.type === 'stat') {
+					const direction = typeof consequence.value === 'number' && consequence.value > 0 ? 'increased' : 'decreased';
+					tags.add(`${formatStatName(consequence.target)} ${direction}`);
+				}
+				if (consequence.type === 'questline') {
+					tags.add('Affected the questline');
+				}
+				if (consequence.type === 'relationship') {
+					tags.add('Relationship changed');
+				}
 			}
 		}
 		return Array.from(tags);
