@@ -1600,6 +1600,7 @@
 			{/if}
 		</div>
 		<p class="world-name">World: Ironhaven</p>
+		<a href="/settings" class="settings-link">Settings</a>
 	</div>
 </div>
 
@@ -1693,5 +1694,20 @@
 		opacity: 0.4;
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
+	}
+
+	.settings-link {
+		display: inline-block;
+		margin-top: 1.25rem;
+		font-size: 0.8rem;
+		color: var(--session-end-text);
+		opacity: 0.35;
+		text-decoration: none;
+		letter-spacing: 0.06em;
+		transition: opacity 0.15s;
+	}
+
+	.settings-link:hover {
+		opacity: 0.7;
 	}
 </style>
