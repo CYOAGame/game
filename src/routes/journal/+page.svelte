@@ -9,15 +9,30 @@
 	import { updateQuestlines } from '$lib/engine/questline-tracker';
 	import { saveWorldState } from '$lib/engine/world-loader';
 	import type { PlaySession } from '$lib/types/session';
-	import type { Choice, ChoiceNode } from '$lib/types/blocks';
+	import type { CollapsedRole } from '$lib/types/session';
+	import type { Choice, ChoiceNode, EventTemplate } from '$lib/types/blocks';
 	import { onMount } from 'svelte';
 
+	const TRANSITION_BEATS = [
+		'Time passes...',
+		'Later that day...',
+		'The hours slip by...',
+		'As the sun moves across the sky...',
+		'After a while...',
+		'Some time later...'
+	];
+
 	// Local reactive state
-	let narrative = $state<Array<{ text: string; choiceLabel?: string }>>([]);
+	let narrative = $state<Array<{ text: string; choiceLabel?: string; separator?: boolean; eventTitle?: string }>>([]);
 	let currentNode = $state<ChoiceNode | null>(null);
 	let availableChoices = $state<Choice[]>([]);
 	let isLoading = $state(true);
 	let errorMessage = $state('');
+
+	// Track the current event locally (since a day can span multiple events)
+	let currentEventId = $state('');
+	let currentCollapsedRoles = $state<CollapsedRole[]>([]);
+	let playedEventIds = $state<string[]>([]);
 
 	// Derived from stores
 	let session = $derived($playSession);
@@ -32,30 +47,111 @@
 		session && state ? state.characters.find(c => c.id === session!.characterId) ?? null : null
 	);
 
-	function getCurrentNode(): ChoiceNode | null {
-		if (!session || !blocks) return null;
-		const event = blocks.events.find(e => e.id === session!.eventTemplateId);
-		if (!event) return null;
-		return event.nodes[session.currentNodeId] ?? null;
-	}
+	let currentEventName = $derived(() => {
+		if (!blocks || !currentEventId) return '';
+		const event = blocks.events.find(e => e.id === currentEventId);
+		return event?.name ?? '';
+	});
 
-	function refreshChoices() {
-		if (!session || !currentCharacter) {
-			availableChoices = [];
-			return;
-		}
-		const node = getCurrentNode();
-		if (!node) {
-			availableChoices = [];
-			return;
-		}
-		currentNode = node;
-		availableChoices = getAvailableChoices(node, currentCharacter, session.exhaustion, session.maxExhaustion);
+	function getNodeFromEvent(eventId: string, nodeId: string): ChoiceNode | null {
+		if (!blocks) return null;
+		const event = blocks.events.find(e => e.id === eventId);
+		if (!event) return null;
+		return event.nodes[nodeId] ?? null;
 	}
 
 	function getInterpolatedText(text: string): string {
 		if (!session || !state) return text;
-		return interpolateText(text, session.collapsedRoles, state.characters);
+		return interpolateText(text, currentCollapsedRoles, state.characters);
+	}
+
+	function refreshChoicesForNode(node: ChoiceNode, currentSession: PlaySession, world: typeof state) {
+		if (!world) return;
+		currentNode = node;
+		const character = world.characters.find(c => c.id === currentSession.characterId);
+		if (character) {
+			availableChoices = getAvailableChoices(node, character, currentSession.exhaustion, currentSession.maxExhaustion);
+		} else {
+			availableChoices = [];
+		}
+	}
+
+	function startNextEvent(currentSession: PlaySession, currentWorld: NonNullable<typeof state>) {
+		if (!blocks) return;
+
+		// Pick a random transition beat
+		const beat = TRANSITION_BEATS[Math.floor(Math.random() * TRANSITION_BEATS.length)];
+
+		// Select a new event, preferring ones we haven't played
+		const currentSeason = currentWorld.config.dateSystem.seasons[0];
+		const preferences = currentSession.dayTypePreferences ?? [];
+
+		// Try to exclude already-played events
+		const candidateEvents = blocks.events.filter(e => !playedEventIds.includes(e.id));
+		let event = selectEvent(
+			candidateEvents.length > 0 ? candidateEvents : blocks.events,
+			currentWorld,
+			currentSeason,
+			preferences,
+			blocks.questlines
+		);
+
+		if (!event) {
+			// No more events available: end the day
+			const endSession = { ...currentSession, isComplete: true };
+			playSession.set(endSession);
+			goto('/session-end');
+			return;
+		}
+
+		// Collapse roles for new event
+		const collapseResults = collapseAllRoles(
+			event.roles,
+			currentWorld.characters,
+			blocks.archetypes
+		);
+
+		const newWorld = { ...currentWorld, characters: [...currentWorld.characters] };
+		for (const result of collapseResults) {
+			if (result.wasNewlyCreated && result.newCharacter) {
+				newWorld.characters.push(result.newCharacter);
+			}
+		}
+
+		const newRoles = collapseResults.map(r => ({
+			roleId: r.roleId,
+			characterId: r.characterId,
+			characterName: r.characterName,
+			wasNewlyCreated: r.wasNewlyCreated
+		}));
+
+		// Update local tracking
+		currentEventId = event.id;
+		currentCollapsedRoles = newRoles;
+		playedEventIds = [...playedEventIds, event.id];
+
+		// Update session in store
+		const updatedSession = {
+			...currentSession,
+			eventTemplateId: event.id,
+			collapsedRoles: newRoles,
+			currentNodeId: event.entryNodeId
+		};
+		worldState.set(newWorld);
+		playSession.set(updatedSession);
+
+		// Add transition and new event text to narrative
+		const entryNode = event.nodes[event.entryNodeId];
+		if (entryNode) {
+			const interpolated = interpolateText(entryNode.text, newRoles, newWorld.characters);
+			narrative = [
+				...narrative,
+				{ text: beat, separator: true },
+				{ text: event.name, eventTitle: event.name },
+				{ text: interpolated }
+			];
+			refreshChoicesForNode(entryNode, updatedSession, newWorld);
+		}
 	}
 
 	onMount(() => {
@@ -67,7 +163,28 @@
 			return;
 		}
 
-		// Start a new session
+		// Check if a session was already set up by the setup page
+		const existingSession = $playSession;
+		if (existingSession && !existingSession.isComplete) {
+			// Session was pre-created by setup page — use it
+			currentEventId = existingSession.eventTemplateId;
+			currentCollapsedRoles = existingSession.collapsedRoles;
+			playedEventIds = [existingSession.eventTemplateId];
+
+			const event = savedBlocks.events.find(e => e.id === existingSession.eventTemplateId);
+			if (event) {
+				const entryNode = event.nodes[existingSession.currentNodeId];
+				if (entryNode) {
+					const interpolated = interpolateText(entryNode.text, existingSession.collapsedRoles, savedState.characters);
+					narrative = [{ text: interpolated }];
+					refreshChoicesForNode(entryNode, existingSession, savedState);
+				}
+			}
+			isLoading = false;
+			return;
+		}
+
+		// Fallback: start a new session if none exists (legacy path)
 		const currentSeason = savedState.config.dateSystem.seasons[0];
 		const event = selectEvent(
 			savedBlocks.events,
@@ -83,14 +200,12 @@
 			return;
 		}
 
-		// Collapse roles
 		const collapseResults = collapseAllRoles(
 			event.roles,
 			savedState.characters,
 			savedBlocks.archetypes
 		);
 
-		// Add any new characters to world state
 		const newState = { ...savedState, characters: [...savedState.characters] };
 		for (const result of collapseResults) {
 			if (result.wasNewlyCreated && result.newCharacter) {
@@ -98,7 +213,6 @@
 			}
 		}
 
-		// Pick a character to play (first collapsed role or first living character)
 		let characterId = collapseResults[0]?.characterId ?? '';
 		if (!characterId && newState.characters.length > 0) {
 			characterId = newState.characters.find(c => c.alive)?.id ?? '';
@@ -125,19 +239,18 @@
 			dayTypePreferences: []
 		};
 
+		currentEventId = event.id;
+		currentCollapsedRoles = collapsedRoles;
+		playedEventIds = [event.id];
+
 		worldState.set(newState);
 		playSession.set(newSession);
 
-		// Set initial narrative text
 		const entryNode = event.nodes[event.entryNodeId];
 		if (entryNode) {
 			const interpolated = interpolateText(entryNode.text, collapsedRoles, newState.characters);
 			narrative = [{ text: interpolated }];
-			currentNode = entryNode;
-			const character = newState.characters.find(c => c.id === characterId);
-			if (character) {
-				availableChoices = getAvailableChoices(entryNode, character, 0, 10);
-			}
+			refreshChoicesForNode(entryNode, newSession, newState);
 		}
 
 		isLoading = false;
@@ -148,16 +261,14 @@
 
 		const { session: newSession, world: newWorld } = resolveChoice(choice, session, state);
 
-		// Interpolate choice label for narrative log
 		const choiceLabel = getInterpolatedText(choice.label);
 
-		// Get next node text if available
+		// Get next node text if there is a next node
 		let nextText = '';
-		if (choice.nextNodeId && blocks) {
-			const event = blocks.events.find(e => e.id === session!.eventTemplateId);
-			const nextNode = event?.nodes[choice.nextNodeId];
+		if (choice.nextNodeId) {
+			const nextNode = getNodeFromEvent(currentEventId, choice.nextNodeId);
 			if (nextNode) {
-				nextText = interpolateText(nextNode.text, newSession.collapsedRoles, newWorld.characters);
+				nextText = interpolateText(nextNode.text, currentCollapsedRoles, newWorld.characters);
 			}
 		}
 
@@ -176,24 +287,24 @@
 		playSession.set(newSession);
 		saveWorldState(updatedWorld);
 
-		if (newSession.isComplete) {
+		// Check if session should end: dead or exhausted
+		if (newSession.isDead || newSession.exhaustion >= newSession.maxExhaustion) {
+			const endSession = { ...newSession, isComplete: true };
+			playSession.set(endSession);
 			goto('/session-end');
 			return;
 		}
 
-		// Refresh choices for new node
-		const event = blocks.events.find(e => e.id === newSession.eventTemplateId);
-		if (event && choice.nextNodeId) {
-			const nextNode = event.nodes[choice.nextNodeId];
-			if (nextNode) {
-				currentNode = nextNode;
-				const character = updatedWorld.characters.find(c => c.id === newSession.characterId);
-				if (character) {
-					availableChoices = getAvailableChoices(nextNode, character, newSession.exhaustion, newSession.maxExhaustion);
-				} else {
-					availableChoices = [];
-				}
-			}
+		// If the event node ended (nextNodeId is null), chain another event
+		if (choice.nextNodeId === null) {
+			startNextEvent(newSession, updatedWorld);
+			return;
+		}
+
+		// Otherwise advance within the current event
+		const nextNode = getNodeFromEvent(currentEventId, choice.nextNodeId);
+		if (nextNode) {
+			refreshChoicesForNode(nextNode, newSession, updatedWorld);
 		} else {
 			availableChoices = [];
 		}
@@ -201,7 +312,8 @@
 
 	function handleRest() {
 		if (!session) return;
-		playSession.update(s => s ? { ...s, isComplete: true } : s);
+		const endSession = { ...session, isComplete: true };
+		playSession.set(endSession);
 		goto('/session-end');
 	}
 </script>
@@ -220,7 +332,7 @@
 	<!-- Header -->
 	<header class="journal-header">
 		<div class="header-left">
-			<a href="/" class="back-link">← Home</a>
+			<a href="/" class="back-link">&larr; Home</a>
 		</div>
 		<div class="header-center">
 			{#if session && state}
@@ -260,19 +372,22 @@
 					</div>
 				{/if}
 
-				<!-- Event name -->
-				{#if session}
-					{@const event = blocks.events.find(e => e.id === session!.eventTemplateId)}
-					{#if event}
-						<h2 class="event-title">{event.name}</h2>
-					{/if}
-				{/if}
+				<!-- Current event name -->
+				<h2 class="event-title">{currentEventName()}</h2>
 
 				<!-- Narrative log -->
 				<div class="narrative">
 					{#each narrative as entry, i}
-						{#if entry.choiceLabel}
-							<p class="narrative-choice">› {entry.text}</p>
+						{#if entry.separator}
+							<div class="narrative-separator">
+								<span class="separator-line"></span>
+								<span class="separator-text">{entry.text}</span>
+								<span class="separator-line"></span>
+							</div>
+						{:else if entry.eventTitle}
+							<h3 class="narrative-event-title">{entry.text}</h3>
+						{:else if entry.choiceLabel}
+							<p class="narrative-choice">&rsaquo; {entry.text}</p>
 						{:else}
 							<p class="narrative-text" class:narrative-entry={i === 0} class:narrative-continuation={i > 0}>
 								{entry.text}
@@ -518,6 +633,34 @@
 		font-style: italic;
 		padding-left: 1rem;
 		border-left: 2px solid var(--journal-border);
+	}
+
+	.narrative-separator {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		margin: 1rem 0;
+	}
+
+	.separator-line {
+		flex: 1;
+		height: 1px;
+		background: var(--journal-border);
+	}
+
+	.separator-text {
+		font-size: 0.85rem;
+		color: var(--journal-muted);
+		font-style: italic;
+		white-space: nowrap;
+	}
+
+	.narrative-event-title {
+		font-size: 1.2rem;
+		color: var(--journal-text);
+		font-style: italic;
+		opacity: 0.8;
+		margin-top: 0.25rem;
 	}
 
 	/* Choices section */

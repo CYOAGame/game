@@ -129,11 +129,12 @@ export function resolveChoice(
 	};
 	newSession.choiceLog.push(record);
 
-	if (choice.nextNodeId === null) {
-		newSession.isComplete = true;
-	} else {
+	if (choice.nextNodeId !== null) {
 		newSession.currentNodeId = choice.nextNodeId;
 	}
+	// Note: when nextNodeId is null the event is finished, but the session
+	// is NOT automatically marked complete — the journal page decides
+	// whether to chain another event or end the day.
 
 	return { session: newSession, world: newWorld };
 }
