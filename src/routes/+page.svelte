@@ -1601,6 +1601,7 @@
 		</div>
 		<p class="world-name">World: Ironhaven</p>
 		<a href="/settings" class="settings-link">Settings</a>
+		<a href="/timeline" class="settings-link">World Inspector</a>
 	</div>
 </div>
 
