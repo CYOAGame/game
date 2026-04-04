@@ -8,6 +8,8 @@
 	import { interpolateText } from '$lib/engine/text-generator';
 	import { updateQuestlines } from '$lib/engine/questline-tracker';
 	import { saveWorldState } from '$lib/engine/world-loader';
+	import { enhanceText, type LLMContext } from '$lib/engine/llm-adapter';
+	import { loadPlayerPrefs } from '$lib/stores/player';
 	import type { PlaySession } from '$lib/types/session';
 	import type { CollapsedRole } from '$lib/types/session';
 	import type { Choice, ChoiceNode, EventTemplate } from '$lib/types/blocks';
@@ -52,6 +54,17 @@
 		const event = blocks.events.find(e => e.id === currentEventId);
 		return event?.name ?? '';
 	});
+
+	function buildLLMContext(): LLMContext {
+		return {
+			characterName: currentCharacter?.name ?? '',
+			characterArchetype: currentCharacter?.archetypeId ?? '',
+			locationName: currentCharacter?.locationId,
+			season: session?.date.season,
+			timeContext: session?.timeContext ?? 'present',
+			previousChoices: session?.choiceLog.map(c => c.text).slice(-3)
+		};
+	}
 
 	function getNodeFromEvent(eventId: string, nodeId: string): ChoiceNode | null {
 		if (!blocks) return null;
@@ -158,6 +171,19 @@
 				{ text: interpolated }
 			];
 			refreshChoicesForNode(entryNode, updatedSession, newWorld);
+
+			// Optionally enhance narrative text with LLM in background
+			const prefs = loadPlayerPrefs();
+			if (prefs.llmSetting !== 'none') {
+				const narrativeIndex = narrative.length - 1;
+				enhanceText(interpolated, buildLLMContext(), prefs).then(enhanced => {
+					if (enhanced !== interpolated) {
+						narrative = narrative.map((entry, i) =>
+							i === narrativeIndex ? { ...entry, text: enhanced } : entry
+						);
+					}
+				});
+			}
 		}
 	}
 
@@ -185,6 +211,18 @@
 					const interpolated = interpolateText(entryNode.text, existingSession.collapsedRoles, savedState.characters);
 					narrative = [{ text: interpolated }];
 					refreshChoicesForNode(entryNode, existingSession, savedState);
+
+					// Optionally enhance narrative text with LLM in background
+					const prefs = loadPlayerPrefs();
+					if (prefs.llmSetting !== 'none') {
+						enhanceText(interpolated, buildLLMContext(), prefs).then(enhanced => {
+							if (enhanced !== interpolated) {
+								narrative = narrative.map((entry, i) =>
+									i === 0 ? { ...entry, text: enhanced } : entry
+								);
+							}
+						});
+					}
 				}
 			}
 			isLoading = false;
@@ -260,6 +298,18 @@
 			const interpolated = interpolateText(entryNode.text, collapsedRoles, newState.characters);
 			narrative = [{ text: interpolated }];
 			refreshChoicesForNode(entryNode, newSession, newState);
+
+			// Optionally enhance narrative text with LLM in background
+			const prefs = loadPlayerPrefs();
+			if (prefs.llmSetting !== 'none') {
+				enhanceText(interpolated, buildLLMContext(), prefs).then(enhanced => {
+					if (enhanced !== interpolated) {
+						narrative = narrative.map((entry, i) =>
+							i === 0 ? { ...entry, text: enhanced } : entry
+						);
+					}
+				});
+			}
 		}
 
 		isLoading = false;
@@ -281,12 +331,27 @@
 			}
 		}
 
-		// Update narrative log
+		// Update narrative log — choice labels stay as-is, only narrative text is enhanced
 		narrative = [
 			...narrative,
 			{ text: choiceLabel, choiceLabel: choiceLabel },
 			...(nextText ? [{ text: nextText }] : [])
 		];
+
+		// Optionally enhance the next-node narrative text with LLM in background
+		if (nextText) {
+			const prefs = loadPlayerPrefs();
+			if (prefs.llmSetting !== 'none') {
+				const narrativeIndex = narrative.length - 1;
+				enhanceText(nextText, buildLLMContext(), prefs).then(enhanced => {
+					if (enhanced !== nextText) {
+						narrative = narrative.map((entry, i) =>
+							i === narrativeIndex ? { ...entry, text: enhanced } : entry
+						);
+					}
+				});
+			}
+		}
 
 		// Update questlines
 		const updatedProgress = updateQuestlines(newWorld.questlineProgress, blocks.questlines);
