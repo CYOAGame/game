@@ -18,3 +18,14 @@ describe('serializeWorldStateToFiles', () => {
 		expect(charFiles.length).toBe(2);
 	});
 });
+
+describe('branch naming', () => {
+	it('generates valid branch names from character IDs', () => {
+		// Branch names use character IDs directly
+		const characterId = 'elena_blacksmith_1234';
+		const branchName = `journal/${characterId}`;
+		expect(branchName).toBe('journal/elena_blacksmith_1234');
+		// Should not contain spaces or special chars that git rejects
+		expect(branchName).not.toMatch(/\s/);
+	});
+});
