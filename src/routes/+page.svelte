@@ -7,13 +7,14 @@
 	import type { WorldBlocks } from '$lib/engine/world-loader';
 	import { playerPrefs, loadPlayerPrefs, savePlayerPrefs } from '$lib/stores/player';
 	import { githubState } from '$lib/stores/github';
-	import { validateToken } from '$lib/git/github-client';
+	import { validateToken, checkForkStatus } from '$lib/git/github-client';
 	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles, loadCachedFiles } from '$lib/git/yaml-loader';
 	import { onMount } from 'svelte';
 
 	// Auth states
 	let authMode = $state<'loading' | 'github-ready' | 'unauthenticated' | 'offline'>('loading');
 	let hasSavedWorld = $state(false);
+	let updateAvailable = $state(false);
 
 	onMount(async () => {
 		// Check for ?offline=true
@@ -30,6 +31,10 @@
 			if (result.valid) {
 				if (prefs.repoOwner && prefs.repoName) {
 					authMode = 'github-ready';
+					// Background check for upstream updates
+					checkForkStatus(prefs.githubToken!, prefs.repoOwner, prefs.repoName).then(status => {
+						if (status?.behind) updateAvailable = true;
+					});
 				} else {
 					goto(`${base}/connect`);
 					return;
@@ -1664,6 +1669,9 @@
 				</button>
 				<a href="{base}/connect" class="btn btn-secondary">Switch World</a>
 			</div>
+			{#if updateAvailable}
+				<a href="{base}/connect" class="update-badge">World update available</a>
+			{/if}
 			<a href="{base}/settings" class="settings-link">Settings</a>
 			<a href="{base}/timeline" class="settings-link">World Inspector</a>
 
@@ -1743,6 +1751,23 @@
 		justify-content: center;
 		flex-wrap: wrap;
 		margin-bottom: 1.5rem;
+	}
+
+	.update-badge {
+		display: inline-block;
+		font-size: 0.78rem;
+		color: var(--journal-accent);
+		border: 1px solid var(--journal-accent);
+		border-radius: 3px;
+		padding: 0.2rem 0.6rem;
+		text-decoration: none;
+		opacity: 0.75;
+		transition: opacity 0.15s;
+		margin-bottom: 1rem;
+	}
+
+	.update-badge:hover {
+		opacity: 1;
 	}
 
 	.btn {

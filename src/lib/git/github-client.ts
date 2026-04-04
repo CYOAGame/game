@@ -65,3 +65,79 @@ export async function listUserRepos(token: string): Promise<Array<{ owner: strin
 		return [];
 	}
 }
+
+/**
+ * Check if a repo is a fork and if it's behind its parent.
+ * Returns null if not a fork, or { behind: true/false, behindBy: number, parentOwner, parentRepo }
+ */
+export async function checkForkStatus(
+	token: string,
+	owner: string,
+	repo: string
+): Promise<{ isFork: boolean; behind: boolean; behindBy: number; parentOwner: string; parentRepo: string } | null> {
+	try {
+		const octokit = getOctokit(token);
+		const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
+
+		if (!repoData.parent) {
+			return null; // Not a fork
+		}
+
+		const parentOwner = repoData.parent.owner.login;
+		const parentRepo = repoData.parent.name;
+
+		// Compare the fork to its parent
+		try {
+			const { data: comparison } = await octokit.rest.repos.compareCommits({
+				owner: parentOwner,
+				repo: parentRepo,
+				base: `${owner}:main`,
+				head: `${parentOwner}:main`
+			});
+
+			return {
+				isFork: true,
+				behind: comparison.ahead_by > 0,
+				behindBy: comparison.ahead_by,
+				parentOwner,
+				parentRepo
+			};
+		} catch {
+			// If comparison fails (e.g., diverged histories), assume behind
+			return { isFork: true, behind: true, behindBy: 0, parentOwner, parentRepo };
+		}
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Sync a fork with its upstream parent (merge upstream changes).
+ */
+export async function syncFork(
+	token: string,
+	owner: string,
+	repo: string
+): Promise<{ success: boolean; error?: string }> {
+	const octokit = getOctokit(token);
+	try {
+		await octokit.rest.repos.mergeUpstream({
+			owner,
+			repo,
+			branch: 'main'
+		});
+		return { success: true };
+	} catch (err: any) {
+		// Try master
+		try {
+			await octokit.rest.repos.mergeUpstream({
+				owner,
+				repo,
+				branch: 'master'
+			});
+			return { success: true };
+		} catch (err2: any) {
+			return { success: false, error: err2.message ?? err.message ?? 'Sync failed' };
+		}
+	}
+}

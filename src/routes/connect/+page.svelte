@@ -4,7 +4,7 @@
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { githubState, saveGitHubState } from '$lib/stores/github';
 	import { playerPrefs, savePlayerPrefs, loadPlayerPrefs } from '$lib/stores/player';
-	import { parseRepoUrl, validateRepo, forkRepo } from '$lib/git/github-client';
+	import { parseRepoUrl, validateRepo, forkRepo, checkForkStatus, syncFork } from '$lib/git/github-client';
 	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles } from '$lib/git/yaml-loader';
 	import { saveWorldState, saveWorldBlocks } from '$lib/engine/world-loader';
 	import { onMount } from 'svelte';
@@ -27,6 +27,12 @@
 	let recentRepo = $state('');
 	let loadingRecent = $state(false);
 	let recentError = $state('');
+
+	// Fork sync state
+	let showSyncPrompt = $state(false);
+	let syncInfo = $state<{ behindBy: number; parentOwner: string; parentRepo: string } | null>(null);
+	let syncingFork = $state(false);
+	let syncResult = $state<'idle' | 'success' | 'error'>('idle');
 
 	onMount(() => {
 		const prefs = loadPlayerPrefs();
@@ -65,6 +71,16 @@
 		const updatedPrefs = loadPlayerPrefs();
 		savePlayerPrefs({ ...updatedPrefs, repoOwner: owner, repoName: repo });
 		saveGitHubState($githubState);
+
+		// Check if fork is behind upstream
+		const forkStatus = await checkForkStatus(tkn, owner, repo);
+		if (forkStatus?.behind) {
+			// Don't navigate yet — show sync prompt
+			showSyncPrompt = true;
+			syncInfo = forkStatus;
+			return;
+		}
+
 		goto(`${base}/journal/setup`);
 	}
 
@@ -129,6 +145,33 @@
 		} finally {
 			loadingRecent = false;
 		}
+	}
+
+	async function handleSync() {
+		const prefs = loadPlayerPrefs();
+		if (!prefs.githubToken || !prefs.repoOwner || !prefs.repoName) return;
+		syncingFork = true;
+		const result = await syncFork(prefs.githubToken, prefs.repoOwner, prefs.repoName);
+		if (result.success) {
+			syncResult = 'success';
+			const files = await fetchRepoFiles(prefs.githubToken!, prefs.repoOwner!, prefs.repoName!);
+			const blocks = buildWorldBlocksFromFiles(files);
+			const state = buildWorldStateFromFiles(files, blocks.config);
+			cacheFiles(files);
+			worldBlocks.set(blocks);
+			worldState.set(state);
+			saveWorldBlocks(blocks);
+			saveWorldState(state);
+			setTimeout(() => goto(`${base}/journal/setup`), 1500);
+		} else {
+			syncResult = 'error';
+		}
+		syncingFork = false;
+	}
+
+	function skipSync() {
+		showSyncPrompt = false;
+		goto(`${base}/journal/setup`);
 	}
 
 	function handleLogout() {
@@ -196,6 +239,28 @@
 				{forking ? 'Creating World...' : 'Create New World'}
 			</button>
 		</section>
+
+		<!-- Fork Sync Prompt -->
+		{#if showSyncPrompt}
+			<div class="sync-prompt">
+				<h3 class="sync-title">World Update Available</h3>
+				<p class="sync-desc">The world template has new content ({syncInfo?.behindBy} updates). Would you like to sync?</p>
+				<p class="sync-hint">This brings in new events, archetypes, and other content from the world creator.</p>
+				<div class="sync-actions">
+					<button class="btn btn-primary" onclick={handleSync} disabled={syncingFork}>
+						{syncingFork ? 'Syncing...' : 'Sync Now'}
+					</button>
+					<button class="btn btn-secondary" onclick={skipSync} disabled={syncingFork}>
+						Skip for Now
+					</button>
+				</div>
+				{#if syncResult === 'success'}
+					<p class="sync-success">Synced successfully! Loading updated world...</p>
+				{:else if syncResult === 'error'}
+					<p class="sync-error">Sync failed. You can try again later from Settings.</p>
+				{/if}
+			</div>
+		{/if}
 
 		<!-- Join World -->
 		<section class="section">
@@ -424,6 +489,64 @@
 
 	/* Error */
 	.error-msg {
+		font-size: 0.85rem;
+		color: #e09090;
+		background: rgba(180, 60, 60, 0.15);
+		border: 1px solid rgba(180, 60, 60, 0.4);
+		border-radius: 4px;
+		padding: 0.5rem 0.75rem;
+		margin: 0;
+	}
+
+	/* Sync prompt */
+	.sync-prompt {
+		background: var(--session-end-card-bg);
+		border: 1px solid var(--journal-accent);
+		border-radius: 6px;
+		padding: 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.sync-title {
+		font-size: 1rem;
+		color: var(--journal-accent);
+		margin: 0;
+		font-weight: normal;
+		letter-spacing: 0.04em;
+	}
+
+	.sync-desc {
+		font-size: 0.9rem;
+		margin: 0;
+		line-height: 1.5;
+	}
+
+	.sync-hint {
+		font-size: 0.82rem;
+		opacity: 0.6;
+		margin: 0;
+		line-height: 1.5;
+	}
+
+	.sync-actions {
+		display: flex;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+
+	.sync-success {
+		font-size: 0.85rem;
+		color: #90c890;
+		background: rgba(60, 140, 60, 0.15);
+		border: 1px solid rgba(60, 140, 60, 0.4);
+		border-radius: 4px;
+		padding: 0.5rem 0.75rem;
+		margin: 0;
+	}
+
+	.sync-error {
 		font-size: 0.85rem;
 		color: #e09090;
 		background: rgba(180, 60, 60, 0.15);
