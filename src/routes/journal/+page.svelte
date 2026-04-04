@@ -104,11 +104,12 @@
 			return;
 		}
 
-		// Collapse roles for new event
+		// Collapse roles for new event (exclude player character from NPC roles)
 		const collapseResults = collapseAllRoles(
 			event.roles,
 			currentWorld.characters,
-			blocks.archetypes
+			blocks.archetypes,
+			[currentSession.characterId]
 		);
 
 		const newWorld = { ...currentWorld, characters: [...currentWorld.characters] };
@@ -203,7 +204,8 @@
 		const collapseResults = collapseAllRoles(
 			event.roles,
 			savedState.characters,
-			savedBlocks.archetypes
+			savedBlocks.archetypes,
+			[] // legacy path — no player character to exclude yet
 		);
 
 		const newState = { ...savedState, characters: [...savedState.characters] };

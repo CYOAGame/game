@@ -82,7 +82,8 @@
 		const collapseResults = collapseAllRoles(
 			event.roles,
 			activeState.characters,
-			blocks.archetypes
+			blocks.archetypes,
+			[character.id]
 		);
 
 		for (const result of collapseResults) {

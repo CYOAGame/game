@@ -132,10 +132,11 @@ export function collapseRole(
 export function collapseAllRoles(
 	roles: Role[],
 	characters: Character[],
-	archetypes: Archetype[]
+	archetypes: Archetype[],
+	initialExcludeIds: string[] = []
 ): Array<CollapsedRole & { newCharacter?: Character }> {
 	const results: Array<CollapsedRole & { newCharacter?: Character }> = [];
-	const assignedIds: string[] = [];
+	const assignedIds: string[] = [...initialExcludeIds];
 
 	for (const role of roles) {
 		const result = collapseRole(role, characters, archetypes, assignedIds);
