@@ -4,6 +4,7 @@ export interface PlayerPrefs {
 	dayTypePreferences: string[];
 	llmSetting: 'none' | 'local' | 'claude';
 	llmEndpoint?: string;
+	llmModel?: string;
 	llmApiKey?: string;
 }
 

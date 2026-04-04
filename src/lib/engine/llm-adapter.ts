@@ -26,7 +26,9 @@ export async function enhanceText(
 
 	try {
 		if (prefs.llmSetting === 'local') {
-			return await callLocalLLM(systemPrompt, userPrompt, prefs.llmEndpoint ?? 'http://localhost:11434/v1');
+			const endpoint = prefs.llmEndpoint ?? 'http://localhost:11434/v1';
+			const model = prefs.llmModel || await detectLocalModel(endpoint);
+			return await callLocalLLM(systemPrompt, userPrompt, endpoint, model);
 		}
 		if (prefs.llmSetting === 'claude') {
 			return await callClaudeAPI(systemPrompt, userPrompt, prefs.llmApiKey ?? '');
@@ -66,7 +68,28 @@ function buildUserPrompt(templateText: string, context: LLMContext): string {
 /**
  * Call a local OpenAI-compatible API (Ollama, LM Studio, etc.)
  */
-async function callLocalLLM(systemPrompt: string, userPrompt: string, endpoint: string): Promise<string> {
+/**
+ * Auto-detect the first available model from a local OpenAI-compatible API.
+ */
+async function detectLocalModel(endpoint: string): Promise<string> {
+	try {
+		let url = endpoint.replace(/\/+$/, '');
+		if (url.endsWith('/chat/completions')) {
+			url = url.replace('/chat/completions', '');
+		}
+		const response = await fetch(`${url}/models`);
+		if (response.ok) {
+			const data = await response.json();
+			const firstModel = data.data?.[0]?.id;
+			if (firstModel) return firstModel;
+		}
+	} catch {
+		// ignore
+	}
+	return 'default';
+}
+
+async function callLocalLLM(systemPrompt: string, userPrompt: string, endpoint: string, model: string): Promise<string> {
 	// Normalize endpoint — ensure it ends with /chat/completions
 	let url = endpoint.replace(/\/+$/, '');
 	if (!url.endsWith('/chat/completions')) {
@@ -77,7 +100,7 @@ async function callLocalLLM(systemPrompt: string, userPrompt: string, endpoint: 
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({
-			model: 'default',
+			model,
 			messages: [
 				{ role: 'system', content: systemPrompt },
 				{ role: 'user', content: userPrompt }

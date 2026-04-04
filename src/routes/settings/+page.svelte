@@ -8,6 +8,7 @@
 		dayTypePreferences: [],
 		llmSetting: 'none',
 		llmEndpoint: 'http://localhost:11434/v1',
+		llmModel: '',
 		llmApiKey: ''
 	});
 
@@ -20,6 +21,7 @@
 		prefs = {
 			...loaded,
 			llmEndpoint: loaded.llmEndpoint ?? 'http://localhost:11434/v1',
+			llmModel: loaded.llmModel ?? '',
 			llmApiKey: loaded.llmApiKey ?? ''
 		};
 	});
@@ -119,6 +121,17 @@
 						type="text"
 						bind:value={prefs.llmEndpoint}
 						placeholder="http://localhost:11434/v1"
+					/>
+				</div>
+				<div class="field-group">
+					<label class="field-label" for="model">Model Name <span style="opacity: 0.5;">(optional)</span></label>
+					<p class="field-hint">Leave blank to auto-detect. Examples: <code>gemma3:1b</code>, <code>llama3.2:3b</code></p>
+					<input
+						id="model"
+						class="field-input"
+						type="text"
+						bind:value={prefs.llmModel}
+						placeholder="auto-detect"
 					/>
 				</div>
 				<button
