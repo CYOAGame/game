@@ -16,10 +16,19 @@
 	let hasSavedWorld = $state(false);
 	let updateAvailable = $state(false);
 
-	onMount(async () => {
-		// Check for ?offline=true
-		const isOffline = page.url.searchParams.get('offline') === 'true';
+	let isOffline = $derived(page.url.searchParams.get('offline') === 'true');
+
+	// React to offline param changes
+	$effect(() => {
 		if (isOffline) {
+			authMode = 'offline';
+			hasSavedWorld = loadWorldState() !== null;
+		}
+	});
+
+	onMount(async () => {
+		// If offline mode, skip auth check
+		if (page.url.searchParams.get('offline') === 'true') {
 			authMode = 'offline';
 			hasSavedWorld = loadWorldState() !== null;
 			return;
