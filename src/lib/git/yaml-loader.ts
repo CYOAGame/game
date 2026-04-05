@@ -10,7 +10,9 @@ export function parseYamlContent<T>(base64Content: string): T | null {
 	if (!base64Content) return null;
 	try {
 		const cleaned = base64Content.replace(/\s/g, '');
-		const decoded = atob(cleaned);
+		// Use TextDecoder for proper UTF-8 handling (atob only does Latin-1)
+		const bytes = Uint8Array.from(atob(cleaned), c => c.charCodeAt(0));
+		const decoded = new TextDecoder('utf-8').decode(bytes);
 		const parsed = yaml.load(decoded);
 		if (parsed === null || parsed === undefined) return null;
 		return parsed as T;
