@@ -42,25 +42,19 @@ export async function enhanceText(
 }
 
 function buildSystemPrompt(context: LLMContext): string {
-	let prompt = `You lightly polish journal entries for a medieval RPG. Rules:
-- First person, past tense, plain language
-- MAXIMUM 2 sentences. Never more.
-- Keep the same meaning. Do not add characters, events, or details
-- No flowery language, no purple prose, no metaphors
-- Write like a tired person jotting notes, not a novelist
-- Never use em dashes`;
+	let prompt = `You are a narrative writer for a medieval journal RPG. Write in first-person journal style, as if the character is writing in their diary at the end of the day. Be vivid but concise - 2-4 sentences max. Do not add new plot points or characters. Only enhance the prose of what happened.`;
 
 	if (context.timeContext === 'past') {
-		prompt += `\n- This is a memory. Keep it brief and matter-of-fact.`;
+		prompt += ` This entry takes place in the past - use a nostalgic, reflective tone.`;
 	} else if (context.timeContext === 'future') {
-		prompt += `\n- This hasn't happened yet. Keep it uncertain and short.`;
+		prompt += ` This entry takes place in the future - events feel fresh and uncertain.`;
 	}
 
 	return prompt;
 }
 
 function buildUserPrompt(templateText: string, context: LLMContext): string {
-	let prompt = `Polish this text lightly. Keep it SHORT. Maximum 2 sentences. Same meaning, just slightly better wording.\n\n`;
+	let prompt = `Rewrite this journal entry passage in richer prose. Keep the same events and meaning, just improve the writing.\n\n`;
 	prompt += `Character: ${context.characterName} the ${context.characterArchetype}\n`;
 	if (context.locationName) prompt += `Location: ${context.locationName}\n`;
 	if (context.season) prompt += `Season: ${context.season}\n`;
@@ -111,7 +105,7 @@ async function callLocalLLM(systemPrompt: string, userPrompt: string, endpoint: 
 				{ role: 'system', content: systemPrompt },
 				{ role: 'user', content: userPrompt }
 			],
-			max_tokens: 80,
+			max_tokens: 300,
 			temperature: 0.8
 		})
 	});
@@ -144,7 +138,7 @@ async function callClaudeAPI(systemPrompt: string, userPrompt: string, apiKey: s
 		},
 		body: JSON.stringify({
 			model: 'claude-haiku-4-5-20251001',
-			max_tokens: 80,
+			max_tokens: 300,
 			system: systemPrompt,
 			messages: [
 				{ role: 'user', content: userPrompt }
