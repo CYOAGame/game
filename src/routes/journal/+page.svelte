@@ -59,6 +59,38 @@
 	// Character overview panel
 	let showCharacterPanel = $state(false);
 
+	let characterBio = $derived(() => {
+		if (!currentCharacter || !state || !session) return '';
+		const char = currentCharacter;
+		const parts: string[] = [];
+
+		// Age
+		const currentYear = session.date.year;
+		const age = currentYear - char.birthDate.year;
+		if (age > 0) parts.push(`${age} years old`);
+
+		// Location
+		if (char.locationId) {
+			const loc = state.locations.find(l => l.id === char.locationId);
+			parts.push(loc ? loc.name : char.locationId);
+		}
+
+		// Faction standing
+		const factionEntries = Object.entries(char.factions).filter(([_, v]) => v > 0);
+		if (factionEntries.length > 0) {
+			const topFaction = factionEntries.sort((a, b) => b[1] - a[1])[0];
+			const fName = topFaction[0].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+			parts.push(`affiliated with ${fName}`);
+		}
+
+		// Alive/dead
+		if (!char.alive) {
+			parts.push('deceased');
+		}
+
+		return parts.join('. ') + (parts.length > 0 ? '.' : '');
+	});
+
 	let characterTraits = $derived(() => {
 		if (!currentCharacter) return [];
 		return Object.entries(currentCharacter.traits).map(([key, value]) => ({
@@ -518,6 +550,10 @@
 
 				{#if showCharacterPanel}
 					<div class="character-panel">
+						{#if characterBio()}
+							<div class="panel-bio">{characterBio()}</div>
+						{/if}
+
 						<div class="panel-section">
 							<div class="panel-label">Traits</div>
 							<div class="trait-list">
@@ -986,6 +1022,15 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
+	}
+
+	.panel-bio {
+		font-size: 0.85rem;
+		line-height: 1.5;
+		opacity: 0.75;
+		font-style: italic;
+		padding-bottom: 0.5rem;
+		border-bottom: 1px solid var(--journal-border);
 	}
 
 	.panel-section {
