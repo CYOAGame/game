@@ -62,6 +62,52 @@
 		return `Year ${year}`;
 	}
 
+	// Time delta from last played entry
+	let timeDelta = $derived((): string => {
+		if (!navCtx.targetDate || !state || !navCtx.characterId) return '';
+		// Find the most recent timeline entry for this character
+		const charEntries = state.timeline.filter(e => e.characterId === navCtx.characterId);
+		if (charEntries.length === 0) return '';
+		const lastEntry = charEntries[charEntries.length - 1];
+		const yearDiff = Math.abs(navCtx.targetDate.year - lastEntry.date.year);
+		if (yearDiff === 0) {
+			return 'Same year as your last entry';
+		}
+		const direction = navCtx.timeContext === 'past' ? 'before' : 'after';
+		return `${yearDiff} ${yearDiff === 1 ? 'year' : 'years'} ${direction} your last entry`;
+	});
+
+	// Backstory — last timeline entry summary (only for past, not future)
+	let backstory = $derived((): { date: string; summary: string } | null => {
+		if (!state || !navCtx.characterId) return null;
+		// For future: don't spoil what comes next
+		if (navCtx.timeContext === 'future') return null;
+		const charEntries = state.timeline.filter(e => e.characterId === navCtx.characterId);
+		if (charEntries.length === 0) return null;
+		// Find the entry closest to (but before) the target date, or the most recent
+		let bestEntry = charEntries[charEntries.length - 1];
+		if (navCtx.targetDate) {
+			const seasonOrder = state.config.dateSystem.seasons;
+			const before = charEntries.filter(e => {
+				if (e.date.year < navCtx.targetDate!.year) return true;
+				if (e.date.year === navCtx.targetDate!.year) {
+					const si = seasonOrder.indexOf(e.date.season);
+					const ti = seasonOrder.indexOf(navCtx.targetDate!.season);
+					return si < ti || (si === ti && e.date.day <= navCtx.targetDate!.day);
+				}
+				return false;
+			});
+			if (before.length > 0) {
+				bestEntry = before[before.length - 1];
+			}
+		}
+		const season = bestEntry.date.season.charAt(0).toUpperCase() + bestEntry.date.season.slice(1);
+		return {
+			date: `${season}, Year ${bestEntry.date.year}, Day ${bestEntry.date.day}`,
+			summary: bestEntry.summary
+		};
+	});
+
 	function buildAndStartSession(
 		character: { id: string; archetypeId: string },
 		activeState: ReturnType<typeof $worldState> & {},
@@ -215,6 +261,16 @@
 				<div class="time-context-badge">
 					{timeContextLabel()}
 				</div>
+				{#if timeDelta()}
+					<p class="time-delta">{timeDelta()}</p>
+				{/if}
+				{#if backstory()}
+					<div class="backstory">
+						<div class="backstory-label">Last known entry</div>
+						<div class="backstory-date">{backstory()?.date}</div>
+						<div class="backstory-summary">{backstory()?.summary}</div>
+					</div>
+				{/if}
 			{/if}
 
 			<!-- Pre-selected character card -->
@@ -595,5 +651,41 @@
 	.refresh-link:disabled {
 		opacity: 0.3;
 		cursor: not-allowed;
+	}
+
+	.time-delta {
+		font-size: 0.85rem;
+		opacity: 0.6;
+		font-style: italic;
+		margin: 0.25rem 0 0;
+		text-align: center;
+	}
+
+	.backstory {
+		background: rgba(139, 105, 20, 0.08);
+		border: 1px solid var(--journal-border);
+		border-radius: 6px;
+		padding: 0.75rem 1rem;
+		margin: 0.75rem 0;
+	}
+
+	.backstory-label {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		opacity: 0.5;
+		margin-bottom: 0.3rem;
+	}
+
+	.backstory-date {
+		font-size: 0.8rem;
+		opacity: 0.6;
+		margin-bottom: 0.25rem;
+	}
+
+	.backstory-summary {
+		font-size: 0.9rem;
+		line-height: 1.5;
+		opacity: 0.85;
 	}
 </style>
