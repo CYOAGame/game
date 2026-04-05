@@ -156,7 +156,7 @@
 			// No more fresh events available: end the day
 			const updatedState = {
 				...currentWorld,
-				recentEventIds: [...(currentWorld.recentEventIds ?? []), ...playedEventIds].slice(-10)
+				recentEventIds: [...(currentWorld.recentEventIds ?? []), ...playedEventIds].slice(-50)
 			};
 			worldState.set(updatedState);
 			saveWorldState(updatedState);
@@ -409,7 +409,7 @@
 			// Commit played events to recentEventIds before leaving
 			const stateWithRecent = {
 				...updatedWorld,
-				recentEventIds: [...(updatedWorld.recentEventIds ?? []), ...playedEventIds].slice(-10)
+				recentEventIds: [...(updatedWorld.recentEventIds ?? []), ...playedEventIds].slice(-50)
 			};
 			worldState.set(stateWithRecent);
 			saveWorldState(stateWithRecent);
@@ -439,7 +439,7 @@
 		// Commit played events to recentEventIds before leaving
 		const updatedState = {
 			...state,
-			recentEventIds: [...(state.recentEventIds ?? []), ...playedEventIds].slice(-10)
+			recentEventIds: [...(state.recentEventIds ?? []), ...playedEventIds].slice(-50)
 		};
 		worldState.set(updatedState);
 		saveWorldState(updatedState);

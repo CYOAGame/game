@@ -108,9 +108,9 @@ export function weightEvents(
 				weight += 1;
 			}
 		}
-		// Deprioritize recently seen events
+		// Heavily deprioritize recently seen events — nearly zero chance until pool is exhausted
 		if (recentEventIds.includes(event.id)) {
-			weight *= 0.2;
+			weight *= 0.01;
 		}
 		return { event, weight };
 	});
