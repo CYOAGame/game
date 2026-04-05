@@ -88,8 +88,12 @@
 		return `${seasonCapitalized}, Year ${session.date.year}, Day ${session.date.day}`;
 	});
 
-	async function handleSave() {
-		if (!state || !session) return;
+	/**
+	 * Save the current session: create timeline entry, update world state, push to GitHub.
+	 * Returns the updated world state.
+	 */
+	async function saveSession(): Promise<typeof state> {
+		if (!state || !session) return state;
 
 		// Create a timeline entry for this journal session
 		const allConsequences: Array<{ type: string; target: string; value: number | string | boolean }> = [];
@@ -109,9 +113,15 @@
 			summary: `${currentCharacter?.name ?? 'Unknown'} made ${session.choiceLog.length} ${session.choiceLog.length === 1 ? 'choice' : 'choices'}.${session.isDead ? ' They did not survive.' : ''}`
 		};
 
+		// Track played character
+		const playedIds = state.playedCharacterIds.includes(session.characterId)
+			? state.playedCharacterIds
+			: [...state.playedCharacterIds, session.characterId];
+
 		const updated = {
 			...state,
-			timeline: [...state.timeline, entry]
+			timeline: [...state.timeline, entry],
+			playedCharacterIds: playedIds
 		};
 		worldState.set(updated);
 		saveWorldState(updated);
@@ -147,6 +157,11 @@
 			}
 		}
 
+		return updated;
+	}
+
+	async function handleSave() {
+		await saveSession();
 		playSession.set(null);
 		goto(`${base}/journal`);
 	}
@@ -169,20 +184,9 @@
 		goto(`${base}/`);
 	}
 
-	function saveAndTrackCharacter() {
-		if (!state || !session) return;
-		if (!state.playedCharacterIds.includes(session.characterId)) {
-			const updated = { ...state, playedCharacterIds: [...state.playedCharacterIds, session.characterId] };
-			worldState.set(updated);
-			saveWorldState(updated);
-		} else {
-			saveWorldState(state);
-		}
-	}
-
-	function handlePast() {
+	async function handlePast() {
 		if (!session || !currentCharacter || !state) return;
-		saveAndTrackCharacter();
+		await saveSession();
 		const pastDate = generatePastDate(currentCharacter, session.date, state.config.dateSystem, state.timeline);
 		navigationContext.set({
 			mode: 'pre-selected',
@@ -194,9 +198,9 @@
 		goto(`${base}/journal/setup`);
 	}
 
-	function handleFuture() {
+	async function handleFuture() {
 		if (!session || !currentCharacter || !state) return;
-		saveAndTrackCharacter();
+		await saveSession();
 		const futureDate = generateFutureDate(currentCharacter, session.date, state.config.dateSystem, state.timeline);
 		if (!futureDate) return;
 		navigationContext.set({
@@ -209,9 +213,9 @@
 		goto(`${base}/journal/setup`);
 	}
 
-	function handleSomeoneElse() {
+	async function handleSomeoneElse() {
 		if (!state || !session) return;
-		saveAndTrackCharacter();
+		await saveSession();
 		suggestions = suggestCharacters(session.characterId, state, state.playedCharacterIds);
 		showingSuggestions = true;
 	}
