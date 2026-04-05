@@ -54,14 +54,12 @@
 				testStatus = 'success';
 				testMessage = `Connection successful. Sample: "${result.slice(0, 80)}${result.length > 80 ? '...' : ''}"`;
 			} else {
-				// enhanceText returned original — means it fell through without calling the API
-				// This shouldn't happen if mode isn't 'none', but guard anyway
 				testStatus = 'error';
-				testMessage = 'No response from LLM. Check your settings and try again.';
+				testMessage = 'LLM returned the original text unchanged. Check browser console for details.';
 			}
-		} catch {
+		} catch (err: any) {
 			testStatus = 'error';
-			testMessage = 'Connection failed. Check the endpoint or API key.';
+			testMessage = `Connection failed: ${err?.message ?? 'Unknown error'}. Check browser console.`;
 		}
 	}
 

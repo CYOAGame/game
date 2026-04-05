@@ -29,14 +29,18 @@ export async function enhanceText(
 	try {
 		if (prefs.llmSetting === 'local') {
 			const endpoint = prefs.llmEndpoint ?? 'http://localhost:11434/v1';
-			const model = prefs.llmModel || await detectLocalModel(endpoint);
+			let model = prefs.llmModel || '';
+			if (!model) {
+				model = await detectLocalModel(endpoint);
+				console.log('[LLM] Auto-detected model:', model);
+			}
 			return await callLocalLLM(systemPrompt, userPrompt, endpoint, model);
 		}
 		if (prefs.llmSetting === 'claude') {
 			return await callClaudeAPI(systemPrompt, userPrompt, prefs.llmApiKey ?? '');
 		}
 	} catch (err) {
-		console.warn('LLM enhancement failed, using template text:', err);
+		console.warn('[LLM] Enhancement failed:', err);
 		return templateText;
 	}
 
