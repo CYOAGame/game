@@ -75,6 +75,22 @@ function checkPrecondition(
 			return factValue === precondition.value;
 		}
 
+		case 'archetype': {
+			const char = world.characters.find(c => c.id === characterId);
+			if (!char) return false;
+			if (precondition.operator === 'in') {
+				const archetypes = String(precondition.value).split(',').map(s => s.trim());
+				return archetypes.includes(char.archetypeId);
+			}
+			return char.archetypeId === precondition.value;
+		}
+
+		case 'skill': {
+			const char = world.characters.find(c => c.id === characterId);
+			if (!char) return false;
+			return char.skills.includes(precondition.key);
+		}
+
 		case 'location_type':
 		case 'tag':
 		default:
