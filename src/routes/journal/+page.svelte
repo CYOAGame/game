@@ -56,6 +56,48 @@
 		return event?.name ?? '';
 	});
 
+	// Character overview panel
+	let showCharacterPanel = $state(false);
+
+	let characterTraits = $derived(() => {
+		if (!currentCharacter) return [];
+		return Object.entries(currentCharacter.traits).map(([key, value]) => ({
+			label: key.substring(0, 3).toUpperCase(),
+			value
+		}));
+	});
+
+	let topRelationships = $derived(() => {
+		if (!currentCharacter || !state) return [];
+		const rels = Object.entries(currentCharacter.relationships);
+		return rels
+			.map(([targetId, rel]) => {
+				const target = state!.characters.find(c => c.id === targetId);
+				const topAxis = Object.entries(rel.axes).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
+				return {
+					name: target?.name ?? targetId,
+					archetype: target?.archetypeId ?? '',
+					axis: topAxis?.[0] ?? '',
+					value: topAxis?.[1] ?? 0,
+					tags: rel.tags
+				};
+			})
+			.sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+			.slice(0, 3);
+	});
+
+	let recentHistory = $derived(() => {
+		if (!session || !state) return [];
+		return state.timeline
+			.filter(e => e.characterId === session!.characterId)
+			.slice(-3)
+			.reverse()
+			.map(e => ({
+				date: `${e.date.season}, Day ${e.date.day}, Year ${e.date.year}`,
+				summary: e.summary
+			}));
+	});
+
 	function buildLLMContext(): LLMContext {
 		return {
 			characterName: currentCharacter?.name ?? '',
@@ -461,6 +503,71 @@
 					</div>
 				{/if}
 
+				<!-- Character overview toggle -->
+				<button class="character-toggle" onclick={() => showCharacterPanel = !showCharacterPanel}>
+					{showCharacterPanel ? '▾' : '▸'} Character
+				</button>
+
+				{#if showCharacterPanel}
+					<div class="character-panel">
+						<div class="panel-section">
+							<div class="panel-label">Traits</div>
+							<div class="trait-list">
+								{#each characterTraits() as trait}
+									<span class="trait-badge">{trait.label} {trait.value}</span>
+								{/each}
+							</div>
+						</div>
+
+						{#if currentCharacter?.skills.length}
+							<div class="panel-section">
+								<div class="panel-label">Skills</div>
+								<div class="skill-list">
+									{#each currentCharacter.skills as skill}
+										<span class="skill-tag">{skill}</span>
+									{/each}
+								</div>
+							</div>
+						{/if}
+
+						{#if topRelationships().length > 0}
+							<div class="panel-section">
+								<div class="panel-label">Relationships</div>
+								{#each topRelationships() as rel}
+									<div class="rel-row">
+										<span class="rel-name">{rel.name}</span>
+										{#if rel.archetype}<span class="rel-archetype">{rel.archetype}</span>{/if}
+										<span class="rel-axis">{rel.axis}: {rel.value > 0 ? '+' : ''}{rel.value}</span>
+										{#each rel.tags as tag}
+											<span class="rel-tag">{tag}</span>
+										{/each}
+									</div>
+								{/each}
+							</div>
+						{/if}
+
+						{#if recentHistory().length > 0}
+							<div class="panel-section">
+								<div class="panel-label">Recent History</div>
+								{#each recentHistory() as entry}
+									<div class="history-entry">
+										<span class="history-date">{entry.date}</span>
+										<span class="history-summary">{entry.summary}</span>
+									</div>
+								{/each}
+							</div>
+						{/if}
+
+						<div class="panel-section">
+							<div class="panel-label">This Session</div>
+							<div class="session-stats">
+								<span>{session?.choiceLog.length ?? 0} choices made</span>
+								<span>Exhaustion: {session?.exhaustion ?? 0}/{session?.maxExhaustion ?? 10}</span>
+							</div>
+						</div>
+					</div>
+				{/if}
+
 				<!-- Current event name -->
 				<h2 class="event-title">{currentEventName()}</h2>
 
@@ -843,6 +950,126 @@
 
 	.btn-end:hover {
 		opacity: 0.9;
+	}
+
+	/* Character overview panel */
+	.character-toggle {
+		background: none;
+		border: none;
+		color: var(--journal-accent);
+		font-family: var(--journal-font);
+		font-size: 0.85rem;
+		cursor: pointer;
+		padding: 0.25rem 0;
+		opacity: 0.7;
+		transition: opacity 0.15s;
+	}
+
+	.character-toggle:hover {
+		opacity: 1;
+	}
+
+	.character-panel {
+		background: rgba(139, 105, 20, 0.06);
+		border: 1px solid var(--journal-border);
+		border-radius: 4px;
+		padding: 1rem 1.25rem;
+		margin-bottom: 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.panel-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+
+	.panel-label {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		opacity: 0.5;
+	}
+
+	.trait-list,
+	.skill-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+
+	.trait-badge {
+		font-size: 0.8rem;
+		font-weight: 600;
+		padding: 0.15rem 0.5rem;
+		background: rgba(139, 105, 20, 0.1);
+		border: 1px solid var(--journal-border);
+		border-radius: 3px;
+	}
+
+	.skill-tag {
+		font-size: 0.75rem;
+		padding: 0.1rem 0.4rem;
+		background: rgba(58, 42, 26, 0.08);
+		border-radius: 3px;
+		font-style: italic;
+	}
+
+	.rel-row {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		font-size: 0.85rem;
+		flex-wrap: wrap;
+	}
+
+	.rel-name {
+		font-weight: 600;
+	}
+
+	.rel-archetype {
+		font-size: 0.75rem;
+		opacity: 0.5;
+		font-style: italic;
+	}
+
+	.rel-axis {
+		font-size: 0.75rem;
+		opacity: 0.7;
+	}
+
+	.rel-tag {
+		font-size: 0.65rem;
+		padding: 0.05rem 0.3rem;
+		background: rgba(139, 105, 20, 0.12);
+		border-radius: 2px;
+		opacity: 0.8;
+	}
+
+	.history-entry {
+		display: flex;
+		gap: 0.5rem;
+		font-size: 0.8rem;
+		line-height: 1.4;
+	}
+
+	.history-date {
+		opacity: 0.5;
+		white-space: nowrap;
+		font-size: 0.75rem;
+	}
+
+	.history-summary {
+		opacity: 0.8;
+	}
+
+	.session-stats {
+		display: flex;
+		gap: 1rem;
+		font-size: 0.8rem;
+		opacity: 0.7;
 	}
 
 	@media (max-width: 480px) {
