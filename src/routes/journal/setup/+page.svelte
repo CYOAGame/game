@@ -53,6 +53,54 @@
 		return key.charAt(0).toUpperCase() + key.slice(1);
 	}
 
+	let characterDescription = $derived((): string => {
+		if (!preSelectedCharacter || !state) return '';
+		const char = preSelectedCharacter;
+		const parts: string[] = [];
+
+		// Age based on current date
+		const currentYear = navCtx.targetDate?.year ?? state.config.dateSystem.startYear;
+		const age = currentYear - char.birthDate.year;
+		if (age > 0) parts.push(`${age} years old`);
+
+		// Location
+		if (char.locationId) {
+			const loc = state.locations.find(l => l.id === char.locationId);
+			parts.push(loc ? `based in ${loc.name}` : `based in ${char.locationId}`);
+		}
+
+		// Notable relationships
+		const rels = Object.entries(char.relationships);
+		if (rels.length > 0) {
+			const top = rels
+				.map(([id, rel]) => {
+					const target = state.characters.find(c => c.id === id);
+					const topAxis = Object.entries(rel.axes).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
+					return { name: target?.name ?? id, tag: rel.tags[0], axis: topAxis?.[0], value: topAxis?.[1] ?? 0 };
+				})
+				.sort((a, b) => Math.abs(b.value) - Math.abs(a.value))[0];
+			if (top) {
+				if (top.tag) {
+					parts.push(`${top.tag.replace('family:', '')} of ${top.name}`);
+				} else if (top.axis && Math.abs(top.value) >= 3) {
+					const desc = top.value > 0 ? `close ${top.axis} bond with ${top.name}` : `tension with ${top.name}`;
+					parts.push(desc);
+				}
+			}
+		}
+
+		// Recent notable events from timeline
+		const charEntries = state.timeline.filter(e => e.characterId === char.id);
+		if (charEntries.length > 0) {
+			const last = charEntries[charEntries.length - 1];
+			parts.push(`last seen ${last.date.season}, Year ${last.date.year}`);
+		} else {
+			parts.push('no journal entries yet');
+		}
+
+		return parts.join('. ') + '.';
+	});
+
 	function timeContextLabel(): string {
 		if (!navCtx.targetDate) return '';
 		const year = navCtx.targetDate.year;
@@ -279,6 +327,9 @@
 				<div class="character-card selected">
 					<span class="archetype-name">{preSelectedCharacter.name}</span>
 					<span class="character-archetype">{preSelectedCharacter.archetypeId}</span>
+					{#if characterDescription()}
+						<p class="character-desc">{characterDescription()}</p>
+					{/if}
 					<div class="archetype-traits">
 						{#each Object.entries(preSelectedCharacter.traits) as [key, value]}
 							<span class="trait">{traitLabel(key)}: {value}</span>
@@ -651,6 +702,14 @@
 	.refresh-link:disabled {
 		opacity: 0.3;
 		cursor: not-allowed;
+	}
+
+	.character-desc {
+		font-size: 0.85rem;
+		line-height: 1.5;
+		opacity: 0.7;
+		font-style: italic;
+		margin: 0.4rem 0 0.5rem;
 	}
 
 	.time-delta {
