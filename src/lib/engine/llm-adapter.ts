@@ -7,6 +7,8 @@ export interface LLMContext {
 	season?: string;
 	timeContext?: 'past' | 'present' | 'future';
 	previousChoices?: string[];
+	previousNarrative?: string[];
+	lastChoice?: string;
 	questlineStage?: string;
 }
 
@@ -42,26 +44,42 @@ export async function enhanceText(
 }
 
 function buildSystemPrompt(context: LLMContext): string {
-	let prompt = `You are a narrative writer for a medieval journal RPG. Write in first-person journal style, as if the character is writing in their diary at the end of the day. Be vivid but concise - 2-4 sentences max. Do not add new plot points or characters. Only enhance the prose of what happened.`;
+	let prompt = `You rewrite passages for a medieval journal RPG. Rules:
+- First person, past tense
+- 2-4 sentences only. Be concise.
+- Keep the EXACT same events, characters, and meaning. Do not invent anything.
+- The rewrite must flow naturally from what came before.
+- Never use em dashes.`;
 
 	if (context.timeContext === 'past') {
-		prompt += ` This entry takes place in the past - use a nostalgic, reflective tone.`;
+		prompt += `\nThis is a memory from the past.`;
 	} else if (context.timeContext === 'future') {
-		prompt += ` This entry takes place in the future - events feel fresh and uncertain.`;
+		prompt += `\nThis takes place in the future.`;
 	}
 
 	return prompt;
 }
 
 function buildUserPrompt(templateText: string, context: LLMContext): string {
-	let prompt = `Rewrite this journal entry passage in richer prose. Keep the same events and meaning, just improve the writing.\n\n`;
-	prompt += `Character: ${context.characterName} the ${context.characterArchetype}\n`;
-	if (context.locationName) prompt += `Location: ${context.locationName}\n`;
-	if (context.season) prompt += `Season: ${context.season}\n`;
-	if (context.previousChoices?.length) {
-		prompt += `Recent choices: ${context.previousChoices.slice(-3).join(', ')}\n`;
+	let prompt = `I am ${context.characterName} the ${context.characterArchetype}.`;
+	if (context.locationName) prompt += ` I am in ${context.locationName}.`;
+	if (context.season) prompt += ` It is ${context.season}.`;
+	prompt += `\n\n`;
+
+	// Include narrative history so the LLM has continuity
+	if (context.previousNarrative?.length) {
+		prompt += `What has happened so far in this entry:\n`;
+		for (const text of context.previousNarrative.slice(-4)) {
+			prompt += `"${text}"\n`;
+		}
+		prompt += `\n`;
 	}
-	prompt += `\nOriginal text:\n"${templateText}"\n\nRewritten:`;
+
+	if (context.lastChoice) {
+		prompt += `I just chose: "${context.lastChoice}"\n\n`;
+	}
+
+	prompt += `Rewrite this next passage to flow naturally from the above. Same events, same meaning, just better prose:\n"${templateText}"\n\nRewritten:`;
 	return prompt;
 }
 
@@ -80,13 +98,29 @@ async function detectLocalModel(endpoint: string): Promise<string> {
 		const response = await fetch(`${url}/models`);
 		if (response.ok) {
 			const data = await response.json();
-			const firstModel = data.data?.[0]?.id;
-			if (firstModel) return firstModel;
+			const models = data.data ?? [];
+			if (models.length === 0) return 'default';
+			// Prefer larger models (sort by name descending to pick bigger variants)
+			// Common pattern: qwen3:8b > gemma3:1b
+			const sorted = [...models].sort((a: any, b: any) => {
+				const sizeA = parseModelSize(a.id);
+				const sizeB = parseModelSize(b.id);
+				return sizeB - sizeA;
+			});
+			return sorted[0]?.id ?? models[0]?.id ?? 'default';
 		}
 	} catch {
 		// ignore
 	}
 	return 'default';
+}
+
+function parseModelSize(modelId: string): number {
+	const match = modelId.match(/:(\d+)b/i);
+	if (match) return parseInt(match[1]);
+	const match2 = modelId.match(/(\d+)b/i);
+	if (match2) return parseInt(match2[1]);
+	return 0;
 }
 
 async function callLocalLLM(systemPrompt: string, userPrompt: string, endpoint: string, model: string): Promise<string> {

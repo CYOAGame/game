@@ -98,14 +98,22 @@
 			}));
 	});
 
-	function buildLLMContext(): LLMContext {
+	function buildLLMContext(lastChoiceLabel?: string): LLMContext {
+		// Collect recent narrative text for continuity
+		const recentNarrative = narrative
+			.filter(e => !e.choiceLabel)
+			.map(e => e.text)
+			.slice(-4);
+
 		return {
 			characterName: currentCharacter?.name ?? '',
 			characterArchetype: currentCharacter?.archetypeId ?? '',
 			locationName: currentCharacter?.locationId,
 			season: session?.date.season,
 			timeContext: session?.timeContext ?? 'present',
-			previousChoices: session?.choiceLog.map(c => c.text).slice(-3)
+			previousChoices: session?.choiceLog.map(c => c.text).slice(-3),
+			previousNarrative: recentNarrative,
+			lastChoice: lastChoiceLabel
 		};
 	}
 
@@ -386,7 +394,7 @@
 			const prefs = loadPlayerPrefs();
 			if (prefs.llmSetting !== 'none') {
 				const narrativeIndex = narrative.length - 1;
-				enhanceText(nextText, buildLLMContext(), prefs).then(enhanced => {
+				enhanceText(nextText, buildLLMContext(choiceLabel), prefs).then(enhanced => {
 					if (enhanced !== nextText) {
 						narrative = narrative.map((entry, i) =>
 							i === narrativeIndex ? { ...entry, text: enhanced } : entry
