@@ -9,11 +9,13 @@ const CACHE_KEY = 'journal-rpg-repo-files';
 export function parseYamlContent<T>(base64Content: string): T | null {
 	if (!base64Content) return null;
 	try {
-		const decoded = atob(base64Content.replace(/\s/g, ''));
+		const cleaned = base64Content.replace(/\s/g, '');
+		const decoded = atob(cleaned);
 		const parsed = yaml.load(decoded);
 		if (parsed === null || parsed === undefined) return null;
 		return parsed as T;
-	} catch {
+	} catch (err) {
+		console.warn('[parseYaml] Failed to parse content:', err, 'preview:', base64Content.slice(0, 50));
 		return null;
 	}
 }
@@ -86,7 +88,11 @@ export function buildWorldBlocksFromFiles(files: Map<string, string>): WorldBloc
 			if (parsed) archetypes.push(parsed);
 		} else if (path.startsWith('blocks/events/')) {
 			const parsed = parseYamlContent<EventTemplate>(content);
-			if (parsed) events.push(parsed);
+			if (parsed) {
+				events.push(parsed);
+			} else {
+				console.warn(`[WorldBlocks] Failed to parse event: ${path}`);
+			}
 		} else if (path.startsWith('blocks/locations/')) {
 			const parsed = parseYamlContent<LocationType>(content);
 			if (parsed) locations.push(parsed);
