@@ -49,18 +49,22 @@ export async function fetchRepoFiles(token: string, owner: string, repo: string)
 			item => item.type === 'blob' && item.path && /\.(yaml|yml)$/i.test(item.path)
 		);
 
-		// Fetch each blob
-		await Promise.all(
-			yamlItems.map(async item => {
-				if (!item.path || !item.sha) return;
-				try {
-					const { data: blob } = await octokit.rest.git.getBlob({ owner, repo, file_sha: item.sha });
-					files.set(item.path, blob.content);
-				} catch {
-					// skip unreadable files
-				}
-			})
-		);
+		// Fetch blobs in batches to avoid API throttling
+		const BATCH_SIZE = 10;
+		for (let i = 0; i < yamlItems.length; i += BATCH_SIZE) {
+			const batch = yamlItems.slice(i, i + BATCH_SIZE);
+			await Promise.all(
+				batch.map(async item => {
+					if (!item.path || !item.sha) return;
+					try {
+						const { data: blob } = await octokit.rest.git.getBlob({ owner, repo, file_sha: item.sha });
+						files.set(item.path, blob.content);
+					} catch (err) {
+						console.warn(`Failed to fetch ${item.path}:`, err);
+					}
+				})
+			);
+		}
 	} catch {
 		// return whatever we have
 	}
@@ -96,6 +100,7 @@ export function buildWorldBlocksFromFiles(files: Map<string, string>): WorldBloc
 		throw new Error('No world.yaml found in repository');
 	}
 
+	console.log(`[WorldBlocks] Loaded: ${events.length} events, ${archetypes.length} archetypes, ${locations.length} locations, ${questlines.length} questlines`);
 	return { config, archetypes, events, locations, questlines };
 }
 
