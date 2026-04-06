@@ -50,7 +50,8 @@
 	);
 
 	let selectedTimelineEntry = $state<string>('');
-	let timeDirection = $state<'past' | 'present' | 'future'>('present');
+	let expandedTimelineEntry = $state<string>('');
+	let timeDirection = $state<'past' | 'present' | 'future'>('past');
 
 	// Entry counts per character
 	function entryCount(charId: string): number {
@@ -119,7 +120,8 @@
 	function selectPreviousCharacter(id: string) {
 		selectedPreviousCharId = selectedPreviousCharId === id ? '' : id;
 		selectedTimelineEntry = '';
-		timeDirection = 'present';
+		expandedTimelineEntry = '';
+		timeDirection = 'past';
 		// Deselect archetype when picking a previous character
 		if (selectedPreviousCharId) selectedArchetypeId = '';
 	}
@@ -561,17 +563,55 @@
 				{#if selectedPreviousCharId && characterTimeline().length > 0}
 					<section class="section">
 						<h2 class="section-label">Journal History</h2>
-						<p class="section-hint">Select an entry to play before or after that moment, or skip to play in the present.</p>
+						<p class="section-hint">Read past entries, then choose to play before or after one.</p>
 						<div class="timeline-entries">
 							{#each characterTimeline() as entry}
-								<button
-									class="timeline-entry"
-									class:selected={selectedTimelineEntry === entry.id}
-									onclick={() => selectTimelineEntry(entry.id)}
-								>
-									<span class="entry-date">{getEntryDate(entry)}</span>
-									<span class="entry-summary">{entry.summary}</span>
-								</button>
+								<div class="timeline-entry-wrap">
+									<div
+										class="timeline-entry"
+										class:selected={selectedTimelineEntry === entry.id}
+									>
+										<div class="entry-header-row">
+											<span class="entry-date">{getEntryDate(entry)}</span>
+											<div class="entry-actions">
+												<button
+													class="entry-expand-btn"
+													onclick={() => expandedTimelineEntry = expandedTimelineEntry === entry.id ? '' : entry.id}
+												>
+													{expandedTimelineEntry === entry.id ? '▾ Close' : '▸ Read'}
+												</button>
+												<button
+													class="entry-select-btn"
+													class:active={selectedTimelineEntry === entry.id}
+													onclick={() => selectTimelineEntry(entry.id)}
+												>
+													{selectedTimelineEntry === entry.id ? 'Selected' : 'Select'}
+												</button>
+											</div>
+										</div>
+										<span class="entry-summary">{entry.summary}</span>
+									</div>
+									{#if expandedTimelineEntry === entry.id}
+										<div class="entry-detail">
+											{#if entry.choicesMade.length > 0}
+												<div class="detail-label">Choices made</div>
+												<ul class="detail-choices">
+													{#each entry.choicesMade as choice}
+														<li>{choice.replace(/_/g, ' ')}</li>
+													{/each}
+												</ul>
+											{/if}
+											{#if entry.consequences.length > 0}
+												<div class="detail-label">Consequences</div>
+												<div class="detail-tags">
+													{#each entry.consequences as c}
+														<span class="detail-tag">{c.type}: {c.target} {typeof c.value === 'number' && c.value > 0 ? '+' : ''}{c.value}</span>
+													{/each}
+												</div>
+											{/if}
+										</div>
+									{/if}
+								</div>
 							{/each}
 						</div>
 
@@ -583,13 +623,6 @@
 									onclick={() => timeDirection = 'past'}
 								>
 									Before this entry
-								</button>
-								<button
-									class="direction-btn"
-									class:active={timeDirection === 'present'}
-									onclick={() => timeDirection = 'present'}
-								>
-									Present day
 								</button>
 								<button
 									class="direction-btn"
@@ -972,6 +1005,103 @@
 		font-size: 0.85rem;
 		line-height: 1.4;
 		opacity: 0.85;
+	}
+
+	.timeline-entry-wrap {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.entry-header-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.entry-expand-btn {
+		background: none;
+		border: none;
+		color: var(--journal-accent);
+		font-family: var(--journal-font);
+		font-size: 0.75rem;
+		cursor: pointer;
+		opacity: 0.7;
+		padding: 0.1rem 0.3rem;
+		min-height: auto;
+	}
+
+	.entry-expand-btn:hover {
+		opacity: 1;
+	}
+
+	.entry-actions {
+		display: flex;
+		gap: 0.4rem;
+	}
+
+	.entry-select-btn {
+		background: none;
+		border: 1px solid var(--journal-border);
+		color: var(--journal-text);
+		font-family: var(--journal-font);
+		font-size: 0.7rem;
+		cursor: pointer;
+		opacity: 0.6;
+		padding: 0.15rem 0.5rem;
+		border-radius: 3px;
+		min-height: auto;
+	}
+
+	.entry-select-btn:hover {
+		opacity: 1;
+		border-color: var(--journal-accent);
+	}
+
+	.entry-select-btn.active {
+		background: var(--journal-accent);
+		border-color: var(--journal-accent);
+		color: #fff8ee;
+		opacity: 1;
+	}
+
+	.entry-detail {
+		background: rgba(139, 105, 20, 0.04);
+		border: 1px solid var(--journal-border);
+		border-top: none;
+		border-radius: 0 0 4px 4px;
+		padding: 0.65rem 0.85rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.detail-label {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		opacity: 0.5;
+	}
+
+	.detail-choices {
+		margin: 0;
+		padding-left: 1.2rem;
+		font-size: 0.8rem;
+		line-height: 1.6;
+		opacity: 0.8;
+	}
+
+	.detail-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+	}
+
+	.detail-tag {
+		font-size: 0.7rem;
+		padding: 0.1rem 0.4rem;
+		background: rgba(139, 105, 20, 0.1);
+		border-radius: 3px;
+		opacity: 0.75;
 	}
 
 	.time-direction {
