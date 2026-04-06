@@ -49,13 +49,16 @@
 					return;
 				}
 			} else {
-				// Token invalid — clear it
+				// Token invalid — clear it and redirect to login
 				savePlayerPrefs({ ...prefs, githubToken: undefined, githubUsername: undefined });
 				playerPrefs.update(p => ({ ...p, githubToken: undefined, githubUsername: undefined }));
-				authMode = 'unauthenticated';
+				goto(`${base}/login`);
+				return;
 			}
 		} else {
-			authMode = 'unauthenticated';
+			// Not logged in — redirect to login
+			goto(`${base}/login`);
+			return;
 		}
 
 		hasSavedWorld = loadWorldState() !== null;
