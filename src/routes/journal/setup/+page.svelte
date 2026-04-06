@@ -49,8 +49,72 @@
 			: null
 	);
 
-	let selectedTimelineEntry = $state<string>(''); // timeline entry ID
+	let selectedTimelineEntry = $state<string>('');
 	let timeDirection = $state<'past' | 'present' | 'future'>('present');
+
+	// Entry counts per character
+	function entryCount(charId: string): number {
+		if (!state) return 0;
+		return state.timeline.filter(e => e.characterId === charId).length;
+	}
+
+	// Active plot threads from world facts
+	interface PlotThread {
+		id: string;
+		label: string;
+		facts: string[];
+		involvedCharacterIds: string[];
+	}
+
+	let activePlots = $derived((): PlotThread[] => {
+		if (!state) return [];
+		const facts = state.worldFacts ?? {};
+		const threads: PlotThread[] = [];
+
+		// Group facts into plot threads by prefix
+		const plotGroups: Record<string, string[]> = {};
+		for (const [key, value] of Object.entries(facts)) {
+			if (!value) continue;
+			const prefix = key.split('_').slice(0, 2).join('_');
+			if (!plotGroups[prefix]) plotGroups[prefix] = [];
+			plotGroups[prefix].push(key);
+		}
+
+		for (const [prefix, factKeys] of Object.entries(plotGroups)) {
+			// Find characters involved via timeline consequences
+			const involvedIds = new Set<string>();
+			for (const entry of state.timeline) {
+				for (const c of entry.consequences) {
+					if (c.type === 'world_fact' && factKeys.includes(c.target)) {
+						involvedIds.add(entry.characterId);
+					}
+				}
+			}
+
+			const label = prefix.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+			threads.push({
+				id: prefix,
+				label,
+				facts: factKeys,
+				involvedCharacterIds: [...involvedIds]
+			});
+		}
+
+		return threads.filter(t => t.involvedCharacterIds.length > 0);
+	});
+
+	function pickPlotCharacter(plot: PlotThread) {
+		if (!state) return;
+		const aliveInvolved = plot.involvedCharacterIds
+			.map(id => state!.characters.find(c => c.id === id && c.alive))
+			.filter((c): c is Character => c !== undefined);
+		if (aliveInvolved.length === 0) return;
+		const pick = aliveInvolved[Math.floor(Math.random() * aliveInvolved.length)];
+		selectedPreviousCharId = pick.id;
+		selectedArchetypeId = '';
+		selectedTimelineEntry = '';
+		timeDirection = 'present';
+	}
 
 	function selectPreviousCharacter(id: string) {
 		selectedPreviousCharId = selectedPreviousCharId === id ? '' : id;
@@ -482,6 +546,7 @@
 							>
 								<span class="archetype-name">{char.name}</span>
 								<span class="character-archetype">{char.archetypeId}</span>
+								<span class="entry-count">{entryCount(char.id)} {entryCount(char.id) === 1 ? 'entry' : 'entries'}</span>
 								<div class="archetype-traits">
 									{#each Object.entries(char.traits) as [key, value]}
 										<span class="trait">{traitLabel(key)}: {value}</span>
@@ -537,6 +602,23 @@
 						{/if}
 					</section>
 				{/if}
+			{/if}
+
+			<!-- Active plot threads -->
+			{#if activePlots().length > 0}
+				<section class="section">
+					<h2 class="section-label">Active Plots</h2>
+					<p class="section-hint">Pick a plot thread to play a random character involved in it.</p>
+					<div class="plot-grid">
+						{#each activePlots() as plot}
+							<button class="plot-card" onclick={() => pickPlotCharacter(plot)}>
+								<span class="plot-label">{plot.label}</span>
+								<span class="plot-facts">{plot.facts.length} {plot.facts.length === 1 ? 'discovery' : 'discoveries'}</span>
+								<span class="plot-chars">{plot.involvedCharacterIds.length} {plot.involvedCharacterIds.length === 1 ? 'character' : 'characters'} involved</span>
+							</button>
+						{/each}
+					</div>
+				</section>
 			{/if}
 
 			<!-- Archetype selection -->
@@ -798,6 +880,54 @@
 		align-items: center;
 		gap: 0.5rem;
 		margin-top: 0.5rem;
+	}
+
+	.entry-count {
+		font-size: 0.75rem;
+		opacity: 0.5;
+		font-style: italic;
+	}
+
+	.plot-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+		gap: 0.5rem;
+	}
+
+	.plot-card {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		padding: 0.65rem 0.85rem;
+		background: rgba(107, 138, 253, 0.08);
+		border: 1px solid rgba(107, 138, 253, 0.25);
+		border-radius: 4px;
+		cursor: pointer;
+		font-family: var(--journal-font);
+		text-align: left;
+		color: var(--journal-text);
+		transition: border-color 0.15s, background 0.15s;
+	}
+
+	.plot-card:hover {
+		border-color: rgba(107, 138, 253, 0.5);
+		background: rgba(107, 138, 253, 0.15);
+	}
+
+	.plot-label {
+		font-size: 0.9rem;
+		font-weight: 600;
+	}
+
+	.plot-facts {
+		font-size: 0.75rem;
+		opacity: 0.6;
+	}
+
+	.plot-chars {
+		font-size: 0.75rem;
+		opacity: 0.5;
+		font-style: italic;
 	}
 
 	.timeline-entries {
