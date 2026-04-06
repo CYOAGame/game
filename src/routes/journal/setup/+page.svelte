@@ -450,41 +450,38 @@
 				</div>
 			</section>
 
-			<!-- Day type preferences -->
-			<section class="section">
-				<h2 class="section-label">What Kind of Day?</h2>
-				<p class="section-hint">Select as many as you like, or none for a surprise.</p>
-				<div class="day-type-grid">
-					{#each DAY_TYPE_OPTIONS as option}
-						<button
-							class="day-type-btn"
-							class:active={selectedDayTypes.includes(option.id)}
-							onclick={() => toggleDayType(option.id)}
-						>
-							{option.label}
-						</button>
-					{/each}
-				</div>
-			</section>
-
-			<!-- Begin button -->
-			<div class="begin-section">
-				<button
-					class="begin-btn"
-					disabled={!selectedArchetypeId && !selectedPreviousCharId}
-					onclick={selectedPreviousCharId ? beginPreviousCharacter : beginDay}
-				>
-					Begin the Day
-				</button>
-				{#if !selectedArchetypeId && !selectedPreviousCharId}
-					<p class="begin-hint">Choose a role or a previous character to begin.</p>
-				{/if}
-				{#if $githubState.isConnected}
+			{#if $githubState.isConnected}
+				<div class="refresh-section">
 					<button class="refresh-link" onclick={refreshFromRepo} disabled={refreshing}>
 						{refreshing ? 'Refreshing...' : 'Refresh world from repo'}
 					</button>
-				{/if}
-			</div>
+				</div>
+			{/if}
+
+			<!-- Sticky bottom bar - appears when a character is selected -->
+			{#if selectedArchetypeId || selectedPreviousCharId}
+				<div class="sticky-bottom-bar">
+					<div class="sticky-inner">
+						<div class="day-type-row">
+							{#each DAY_TYPE_OPTIONS as option}
+								<button
+									class="day-type-btn"
+									class:active={selectedDayTypes.includes(option.id)}
+									onclick={() => toggleDayType(option.id)}
+								>
+									{option.label}
+								</button>
+							{/each}
+						</div>
+						<button
+							class="begin-btn"
+							onclick={selectedPreviousCharId ? beginPreviousCharacter : beginDay}
+						>
+							Begin the Day
+						</button>
+					</div>
+				</div>
+			{/if}
 		{/if}
 
 		<a href="{base}/" class="back-link">&larr; Back to menu</a>
@@ -509,6 +506,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2rem;
+		padding-bottom: 10rem;
 	}
 
 	.setup-title {
@@ -685,6 +683,39 @@
 		align-items: center;
 		gap: 0.5rem;
 		margin-top: 0.5rem;
+	}
+
+	.refresh-section {
+		text-align: center;
+		margin-top: 0.5rem;
+	}
+
+	.sticky-bottom-bar {
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		background: var(--journal-bg);
+		border-top: 2px solid var(--journal-accent);
+		padding: 0.75rem 1rem;
+		z-index: 20;
+		box-shadow: 0 -4px 12px rgba(58, 42, 26, 0.15);
+	}
+
+	.sticky-inner {
+		max-width: 600px;
+		margin: 0 auto;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.6rem;
+	}
+
+	.day-type-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		justify-content: center;
 	}
 
 	.begin-btn {
