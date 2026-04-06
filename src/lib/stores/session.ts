@@ -3,6 +3,8 @@ import type { PlaySession } from '../types/session';
 
 export const playSession = writable<PlaySession | null>(null);
 
+export const narrativeLog = writable<Array<{ text: string; choiceLabel?: string }>>([]);
+
 export const isPlaying = derived(playSession, ($session) =>
 	$session !== null && !$session.isComplete
 );

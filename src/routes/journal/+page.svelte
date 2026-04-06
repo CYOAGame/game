@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { worldState, worldBlocks } from '$lib/stores/world';
-	import { playSession } from '$lib/stores/session';
+	import { playSession, narrativeLog as narrativeLogStore } from '$lib/stores/session';
 	import { resolveChoice, getAvailableChoices } from '$lib/engine/choice-resolver';
 	import { collapseAllRoles } from '$lib/engine/collapse';
 	import { selectEvent } from '$lib/engine/event-selector';
@@ -27,6 +27,16 @@
 
 	// Local reactive state
 	let narrative = $state<Array<{ text: string; choiceLabel?: string; separator?: boolean; eventTitle?: string }>>([]);
+
+	// Keep the narrative log store in sync so session-end can access it
+	$effect(() => {
+		narrativeLogStore.set(
+			narrative
+				.filter(e => !e.separator && !e.eventTitle)
+				.map(e => ({ text: e.text, choiceLabel: e.choiceLabel }))
+		);
+	});
+
 	let currentNode = $state<ChoiceNode | null>(null);
 	let availableChoices = $state<Choice[]>([]);
 	let isLoading = $state(true);
@@ -713,9 +723,12 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 0.75rem 1.5rem;
-		background: rgba(58, 42, 26, 0.08);
+		background: var(--journal-bg);
 		border-bottom: 1px solid var(--journal-border);
 		gap: 1rem;
+		position: sticky;
+		top: 0;
+		z-index: 10;
 	}
 
 	.header-left,

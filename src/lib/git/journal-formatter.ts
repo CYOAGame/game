@@ -17,7 +17,8 @@ export function formatJournalEntry(
 	character: Character,
 	date: GameDate,
 	choiceLog: ChoiceRecord[],
-	isDead?: boolean
+	isDead: boolean = false,
+	narrativeLog?: Array<{ text: string; choiceLabel?: string }>
 ): string {
 	const lines: string[] = [];
 
@@ -31,7 +32,17 @@ export function formatJournalEntry(
 		lines.push('');
 	}
 
-	if (choiceLog.length > 0) {
+	if (narrativeLog && narrativeLog.length > 0) {
+		for (const entry of narrativeLog) {
+			if (entry.choiceLabel) {
+				lines.push(`> ${entry.text}`);
+				lines.push('');
+			} else {
+				lines.push(entry.text);
+				lines.push('');
+			}
+		}
+	} else if (choiceLog.length > 0) {
 		for (const entry of choiceLog) {
 			if (entry.narrativeText) {
 				lines.push(entry.narrativeText);

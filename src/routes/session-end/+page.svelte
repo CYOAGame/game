@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { worldState, worldBlocks } from '$lib/stores/world';
-	import { playSession } from '$lib/stores/session';
+	import { playSession, narrativeLog as narrativeLogStore } from '$lib/stores/session';
 	import { saveWorldState, loadWorldState } from '$lib/engine/world-loader';
 	import { generatePastDate, generateFutureDate, suggestCharacters } from '$lib/engine/timeline';
 	import { navigationContext } from '$lib/stores/navigation';
@@ -15,6 +15,7 @@
 	// Derived from stores
 	let session = $derived($playSession);
 	let state = $derived($worldState);
+	let narrativeLog = $derived($narrativeLogStore);
 	let syncStatus = $derived($githubState.syncStatus);
 
 	let currentCharacter = $derived(
@@ -134,7 +135,7 @@
 				const stateFiles = serializeWorldStateToFiles(updated);
 				// Add journal entry
 				if (currentCharacter && session) {
-					const journalMd = formatJournalEntry(currentCharacter, session.date, session.choiceLog, session.isDead);
+					const journalMd = formatJournalEntry(currentCharacter, session.date, session.choiceLog, session.isDead, narrativeLog);
 					const journalPath = journalFilePath(currentCharacter, session.date);
 					stateFiles.set(journalPath, journalMd);
 				}
