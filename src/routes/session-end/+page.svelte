@@ -79,7 +79,15 @@
 		if (!session) return '';
 		if (session.isDead) return `${currentCharacter?.name ?? 'Your character'} did not survive the day.`;
 		if (choiceCount === 0) return 'The day passed quietly, without incident.';
-		return `${choiceCount} ${choiceCount === 1 ? 'choice was' : 'choices were'} made this entry.`;
+		// Build a summary from the choices made
+		const choiceTexts = session.choiceLog.map(c => c.text);
+		if (choiceTexts.length <= 3) {
+			return `${currentCharacter?.name ?? 'You'} ${choiceTexts.join(', then ')}.`;
+		}
+		// For longer sessions, show first and last few
+		const first = choiceTexts.slice(0, 2).join(', ');
+		const last = choiceTexts[choiceTexts.length - 1];
+		return `${currentCharacter?.name ?? 'You'} ${first}, and after ${choiceCount - 2} more decisions, ${last}.`;
 	});
 
 	let dateDisplay = $derived((): string => {

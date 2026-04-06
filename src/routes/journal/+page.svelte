@@ -60,6 +60,8 @@
 		session && state ? state.characters.find(c => c.id === session!.characterId) ?? null : null
 	);
 
+	let sessionEventName = $state(''); // Set once at session start, never changes
+
 	let currentEventName = $derived(() => {
 		if (!blocks || !currentEventId) return '';
 		const event = blocks.events.find(e => e.id === currentEventId);
@@ -296,6 +298,8 @@
 			currentEventId = existingSession.eventTemplateId;
 			currentCollapsedRoles = existingSession.collapsedRoles;
 			playedEventIds = [existingSession.eventTemplateId];
+			const initialEvent = savedBlocks.events.find(e => e.id === existingSession.eventTemplateId);
+			sessionEventName = initialEvent?.name ?? '';
 
 			const event = savedBlocks.events.find(e => e.id === existingSession.eventTemplateId);
 			if (event) {
@@ -382,6 +386,7 @@
 		currentEventId = event.id;
 		currentCollapsedRoles = collapsedRoles;
 		playedEventIds = [event.id];
+		sessionEventName = event.name;
 
 		worldState.set(newState);
 		playSession.set(newSession);
@@ -623,7 +628,7 @@
 				{/if}
 
 				<!-- Current event name -->
-				<h2 class="event-title">{currentEventName()}</h2>
+				<h2 class="event-title">{sessionEventName || currentEventName()}</h2>
 
 				<!-- Narrative log -->
 				<div class="narrative">
