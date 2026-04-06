@@ -18,7 +18,7 @@
 	let forkError = $state('');
 
 	// Join World state
-	let repoUrl = $state('');
+	let repoUrl = $state('CYOAGame/Public_Game');
 	let joining = $state(false);
 	let joinError = $state('');
 
@@ -104,6 +104,24 @@
 			forkError = err?.message ?? 'Fork failed. Please try again.';
 		} finally {
 			forking = false;
+		}
+	}
+
+	async function handleJoinPublicWorld() {
+		joinError = '';
+		joining = true;
+		try {
+			const prefs = loadPlayerPrefs();
+			const tkn = prefs.githubToken ?? token;
+			if (!tkn) {
+				goto(`${base}/login`);
+				return;
+			}
+			await connectToRepo('CYOAGame', 'Public_Game');
+		} catch (err: any) {
+			joinError = err?.message ?? 'Failed to connect to public world.';
+		} finally {
+			joining = false;
 		}
 	}
 
@@ -265,8 +283,19 @@
 		<!-- Join World -->
 		<section class="section">
 			<h2 class="section-title">Join World</h2>
+			<button
+				class="btn btn-primary btn-public"
+				onclick={handleJoinPublicWorld}
+				disabled={joining}
+			>
+				{joining ? 'Connecting...' : 'Join Public World'}
+			</button>
+			<p class="section-desc public-desc">
+				Connects to <code>CYOAGame/Public_Game</code> — the shared world for new players.
+			</p>
+			<div class="section-divider">or enter a repo</div>
 			<p class="section-desc">
-				Connect to an existing world repo. Accepts <code>owner/repo</code> or a full GitHub URL.
+				Connect to any world repo. Accepts <code>owner/repo</code> or a full GitHub URL.
 			</p>
 			<div class="field-group">
 				<input
@@ -485,6 +514,33 @@
 	.btn-secondary:hover:not(:disabled) {
 		border-color: var(--journal-accent);
 		opacity: 0.9;
+	}
+
+	.btn-public {
+		font-size: 1.05rem;
+		padding: 0.7rem 1.75rem;
+	}
+
+	.public-desc {
+		margin-top: -0.25rem;
+	}
+
+	.section-divider {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		opacity: 0.35;
+	}
+
+	.section-divider::before,
+	.section-divider::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: var(--session-end-border);
 	}
 
 	/* Error */
