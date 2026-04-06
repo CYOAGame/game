@@ -6,7 +6,7 @@
 	import { collapseAllRoles } from '$lib/engine/collapse';
 	import { selectEvent } from '$lib/engine/event-selector';
 	import { navigationContext } from '$lib/stores/navigation';
-	import { createWorldSnapshotAt } from '$lib/engine/timeline';
+	import { createWorldSnapshotAt, generatePastDate, generateFutureDate } from '$lib/engine/timeline';
 	import type { Archetype } from '$lib/types/blocks';
 	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles } from '$lib/git/yaml-loader';
 	import { saveWorldBlocks, saveWorldState } from '$lib/engine/world-loader';
@@ -49,10 +49,37 @@
 			: null
 	);
 
+	let selectedTimelineEntry = $state<string>(''); // timeline entry ID
+	let timeDirection = $state<'past' | 'present' | 'future'>('present');
+
 	function selectPreviousCharacter(id: string) {
 		selectedPreviousCharId = selectedPreviousCharId === id ? '' : id;
+		selectedTimelineEntry = '';
+		timeDirection = 'present';
 		// Deselect archetype when picking a previous character
 		if (selectedPreviousCharId) selectedArchetypeId = '';
+	}
+
+	let characterTimeline = $derived(() => {
+		if (!selectedPreviousCharId || !state) return [];
+		return state.timeline
+			.filter(e => e.characterId === selectedPreviousCharId)
+			.sort((a, b) => {
+				if (a.date.year !== b.date.year) return a.date.year - b.date.year;
+				const seasons = state!.config.dateSystem.seasons;
+				const si = seasons.indexOf(a.date.season) - seasons.indexOf(b.date.season);
+				if (si !== 0) return si;
+				return a.date.day - b.date.day;
+			});
+	});
+
+	function selectTimelineEntry(entryId: string) {
+		selectedTimelineEntry = selectedTimelineEntry === entryId ? '' : entryId;
+	}
+
+	function getEntryDate(entry: { date: { year: number; season: string; day: number } }): string {
+		const s = entry.date.season.charAt(0).toUpperCase() + entry.date.season.slice(1);
+		return `${s}, Day ${entry.date.day}, Year ${entry.date.year}`;
 	}
 
 	function toggleDayType(id: string) {
@@ -257,10 +284,52 @@
 		if (!state || !blocks || !selectedPreviousCharId) return;
 		const character = state.characters.find(c => c.id === selectedPreviousCharId);
 		if (!character) return;
-		const activeState = { ...state, characters: [...state.characters] };
-		const currentSeason = activeState.config.dateSystem.seasons[0];
-		const date = { year: activeState.config.dateSystem.startYear, season: currentSeason, day: 1 };
-		buildAndStartSession(character, activeState, date, 'present');
+
+		let activeState = { ...state, characters: [...state.characters] };
+		let date: { year: number; season: string; day: number };
+		let context: 'past' | 'present' | 'future' = timeDirection;
+
+		if (selectedTimelineEntry && timeDirection !== 'present') {
+			// Find the selected entry to use as the anchor point
+			const entry = state.timeline.find(e => e.id === selectedTimelineEntry);
+			if (entry) {
+				if (timeDirection === 'past') {
+					const pastDate = generatePastDate(character, entry.date, state.config.dateSystem, state.timeline);
+					date = pastDate;
+					activeState = createWorldSnapshotAt(state, pastDate, blocks.questlines);
+					// Ensure character exists in snapshot
+					if (!activeState.characters.find(c => c.id === character.id)) {
+						activeState.characters.push(character);
+					}
+					worldState.set(activeState);
+				} else {
+					const futureDate = generateFutureDate(character, entry.date, state.config.dateSystem, state.timeline);
+					if (!futureDate) {
+						// Character is dead, can't go to future
+						date = entry.date;
+						context = 'present';
+					} else {
+						date = futureDate;
+					}
+				}
+			} else {
+				date = { year: activeState.config.dateSystem.startYear, season: activeState.config.dateSystem.seasons[0], day: 1 };
+				context = 'present';
+			}
+		} else {
+			// No specific entry selected, play at present
+			const currentSeason = activeState.config.dateSystem.seasons[0];
+			date = { year: activeState.config.dateSystem.startYear, season: currentSeason, day: 1 };
+			context = 'present';
+		}
+
+		// Use date if not already set
+		if (!date!) {
+			const currentSeason = activeState.config.dateSystem.seasons[0];
+			date = { year: activeState.config.dateSystem.startYear, season: currentSeason, day: 1 };
+		}
+
+		buildAndStartSession(character, activeState, date, context);
 	}
 
 	function beginDay() {
@@ -422,6 +491,52 @@
 						{/each}
 					</div>
 				</section>
+
+				<!-- Journal history for selected previous character -->
+				{#if selectedPreviousCharId && characterTimeline().length > 0}
+					<section class="section">
+						<h2 class="section-label">Journal History</h2>
+						<p class="section-hint">Select an entry to play before or after that moment, or skip to play in the present.</p>
+						<div class="timeline-entries">
+							{#each characterTimeline() as entry}
+								<button
+									class="timeline-entry"
+									class:selected={selectedTimelineEntry === entry.id}
+									onclick={() => selectTimelineEntry(entry.id)}
+								>
+									<span class="entry-date">{getEntryDate(entry)}</span>
+									<span class="entry-summary">{entry.summary}</span>
+								</button>
+							{/each}
+						</div>
+
+						{#if selectedTimelineEntry}
+							<div class="time-direction">
+								<button
+									class="direction-btn"
+									class:active={timeDirection === 'past'}
+									onclick={() => timeDirection = 'past'}
+								>
+									Before this entry
+								</button>
+								<button
+									class="direction-btn"
+									class:active={timeDirection === 'present'}
+									onclick={() => timeDirection = 'present'}
+								>
+									Present day
+								</button>
+								<button
+									class="direction-btn"
+									class:active={timeDirection === 'future'}
+									onclick={() => timeDirection = 'future'}
+								>
+									After this entry
+								</button>
+							</div>
+						{/if}
+					</section>
+				{/if}
 			{/if}
 
 			<!-- Archetype selection -->
@@ -683,6 +798,81 @@
 		align-items: center;
 		gap: 0.5rem;
 		margin-top: 0.5rem;
+	}
+
+	.timeline-entries {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.timeline-entry {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		padding: 0.65rem 0.85rem;
+		background: rgba(139, 105, 20, 0.06);
+		border: 1px solid var(--journal-border);
+		border-radius: 4px;
+		cursor: pointer;
+		font-family: var(--journal-font);
+		text-align: left;
+		color: var(--journal-text);
+		transition: border-color 0.15s, background 0.15s;
+	}
+
+	.timeline-entry:hover {
+		border-color: var(--journal-accent);
+		background: rgba(139, 105, 20, 0.12);
+	}
+
+	.timeline-entry.selected {
+		border-color: var(--journal-accent);
+		background: rgba(139, 105, 20, 0.15);
+		border-width: 2px;
+	}
+
+	.entry-date {
+		font-size: 0.75rem;
+		opacity: 0.5;
+		letter-spacing: 0.04em;
+	}
+
+	.entry-summary {
+		font-size: 0.85rem;
+		line-height: 1.4;
+		opacity: 0.85;
+	}
+
+	.time-direction {
+		display: flex;
+		gap: 0.5rem;
+		margin-top: 0.75rem;
+		flex-wrap: wrap;
+	}
+
+	.direction-btn {
+		padding: 0.5rem 1rem;
+		background: transparent;
+		border: 1px solid var(--journal-border);
+		border-radius: 4px;
+		cursor: pointer;
+		font-family: var(--journal-font);
+		font-size: 0.85rem;
+		color: var(--journal-text);
+		opacity: 0.7;
+		transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+	}
+
+	.direction-btn:hover {
+		opacity: 1;
+	}
+
+	.direction-btn.active {
+		background: var(--journal-accent);
+		border-color: var(--journal-accent);
+		color: #fff8ee;
+		opacity: 1;
 	}
 
 	.refresh-section {
