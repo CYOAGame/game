@@ -11,6 +11,7 @@
 	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles } from '$lib/git/yaml-loader';
 	import { saveWorldBlocks, saveWorldState } from '$lib/engine/world-loader';
 	import { githubState } from '$lib/stores/github';
+	import type { Character } from '$lib/types/state';
 
 	const DAY_TYPE_OPTIONS = [
 		{ id: 'action', label: 'Action' },
@@ -27,6 +28,13 @@
 	let archetypes = $derived(blocks?.archetypes ?? []);
 	let selectedArchetypeId = $state<string>('');
 	let selectedDayTypes = $state<string[]>([]);
+	let selectedPreviousCharId = $state<string>('');
+
+	let previousCharacters = $derived<Character[]>(
+		(state?.playedCharacterIds ?? [])
+			.map((id: string) => state!.characters.find(c => c.id === id && c.alive))
+			.filter((c): c is Character => c !== undefined)
+	);
 
 	let selectedArchetype = $derived(
 		archetypes.find((a: Archetype) => a.id === selectedArchetypeId) ?? null
@@ -40,6 +48,12 @@
 			? state.characters.find(c => c.id === navCtx.characterId) ?? null
 			: null
 	);
+
+	function selectPreviousCharacter(id: string) {
+		selectedPreviousCharId = selectedPreviousCharId === id ? '' : id;
+		// Deselect archetype when picking a previous character
+		if (selectedPreviousCharId) selectedArchetypeId = '';
+	}
 
 	function toggleDayType(id: string) {
 		if (selectedDayTypes.includes(id)) {
@@ -239,6 +253,16 @@
 		refreshing = false;
 	}
 
+	function beginPreviousCharacter() {
+		if (!state || !blocks || !selectedPreviousCharId) return;
+		const character = state.characters.find(c => c.id === selectedPreviousCharId);
+		if (!character) return;
+		const activeState = { ...state, characters: [...state.characters] };
+		const currentSeason = activeState.config.dateSystem.seasons[0];
+		const date = { year: activeState.config.dateSystem.startYear, season: currentSeason, day: 1 };
+		buildAndStartSession(character, activeState, date, 'present');
+	}
+
 	function beginDay() {
 		if (!blocks || !state || !selectedArchetype) return;
 
@@ -376,6 +400,30 @@
 			<h1 class="setup-title">Begin a New Day</h1>
 			<p class="setup-subtitle">Choose who you are and what kind of day awaits.</p>
 
+			<!-- Previously played characters -->
+			{#if previousCharacters.length > 0}
+				<section class="section">
+					<h2 class="section-label">Continue as...</h2>
+					<div class="archetype-grid">
+						{#each previousCharacters as char}
+							<button
+								class="archetype-card"
+								class:selected={selectedPreviousCharId === char.id}
+								onclick={() => selectPreviousCharacter(char.id)}
+							>
+								<span class="archetype-name">{char.name}</span>
+								<span class="character-archetype">{char.archetypeId}</span>
+								<div class="archetype-traits">
+									{#each Object.entries(char.traits) as [key, value]}
+										<span class="trait">{traitLabel(key)}: {value}</span>
+									{/each}
+								</div>
+							</button>
+						{/each}
+					</div>
+				</section>
+			{/if}
+
 			<!-- Archetype selection -->
 			<section class="section">
 				<h2 class="section-label">Choose Your Role</h2>
@@ -423,13 +471,13 @@
 			<div class="begin-section">
 				<button
 					class="begin-btn"
-					disabled={!selectedArchetypeId}
-					onclick={beginDay}
+					disabled={!selectedArchetypeId && !selectedPreviousCharId}
+					onclick={selectedPreviousCharId ? beginPreviousCharacter : beginDay}
 				>
 					Begin the Day
 				</button>
-				{#if !selectedArchetypeId}
-					<p class="begin-hint">Choose a role to begin.</p>
+				{#if !selectedArchetypeId && !selectedPreviousCharId}
+					<p class="begin-hint">Choose a role or a previous character to begin.</p>
 				{/if}
 				{#if $githubState.isConnected}
 					<button class="refresh-link" onclick={refreshFromRepo} disabled={refreshing}>
