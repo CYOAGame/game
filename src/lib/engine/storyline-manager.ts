@@ -162,7 +162,8 @@ export function generateHooks(
 		}
 	}
 
-	const hooks: Hook[] = [];
+	// Build ALL candidate hooks with affinity scores
+	const allCandidates: Array<Hook & { affinity: number }> = [];
 
 	// Storyline hooks
 	for (const [storyline, chapters] of Object.entries(storylineGroups)) {
@@ -174,45 +175,91 @@ export function generateHooks(
 			.sort((a, b) => (b.chapter ?? 1) - (a.chapter ?? 1));
 		const best = sorted[0];
 		if (!best) continue;
-
-		// Skip if this character already played this exact event
 		if (playedEventIds.has(best.id)) continue;
 
 		const affinity = character ? archetypeAffinity(best, character) : 0;
 		const teaserText = best.nodes[best.entryNodeId]?.text?.slice(0, 150) ?? best.name;
-		hooks.push({
+		allCandidates.push({
 			eventId: best.id, storyline, chapter: best.chapter ?? null,
-			teaserText, tension: tension + affinity, // affinity boosts effective tension for sorting
-			urgency: tensionToUrgency(tension),
+			teaserText, tension, urgency: tensionToUrgency(tension),
 			isStorylineContinuation: slState?.lastPlayerSession !== null && slState?.lastPlayerSession !== undefined,
-			reentryRecap: best.reentry_recap ?? null
+			reentryRecap: best.reentry_recap ?? null,
+			affinity
 		});
 	}
 
-	// Standalone hooks - prioritize archetype-matched events
-	const scored = standalones
-		.filter(e => !playedEventIds.has(e.id))
-		.map(event => ({
-			event,
-			affinity: character ? archetypeAffinity(event, character) : 0
-		}))
-		.sort((a, b) => b.affinity - a.affinity || Math.random() - 0.5);
-
-	// Take top archetype-matched standalones (up to 2) plus 1 random
-	const archetypeMatched = scored.filter(s => s.affinity > 0).slice(0, 2);
-	const generic = scored.filter(s => s.affinity === 0).slice(0, 1);
-	const standaloneHooks = [...archetypeMatched, ...generic];
-
-	for (const { event, affinity } of standaloneHooks) {
+	// Standalone hooks
+	for (const event of standalones) {
+		if (playedEventIds.has(event.id)) continue;
+		const affinity = character ? archetypeAffinity(event, character) : 0;
 		const teaserText = event.nodes[event.entryNodeId]?.text?.slice(0, 150) ?? event.name;
-		hooks.push({
+		allCandidates.push({
 			eventId: event.id, storyline: null, chapter: null,
-			teaserText, tension: affinity, urgency: 'calm',
-			isStorylineContinuation: false, reentryRecap: null
+			teaserText, tension: 0, urgency: 'calm',
+			isStorylineContinuation: false, reentryRecap: null,
+			affinity
 		});
 	}
 
-	// Sort: highest tension/affinity first
-	hooks.sort((a, b) => b.tension - a.tension);
-	return hooks;
+	// Selection strategy:
+	// 1. Always include archetype-specific events (affinity >= 10) - up to 2
+	// 2. Include high-tension storylines (tension >= 50) - up to 2
+	// 3. Fill remaining slots with best affinity matches - up to total of 5
+	// 4. Generic events (affinity 0) only fill if nothing better exists
+
+	type ScoredHook = Hook & { affinity: number };
+	const hooks: ScoredHook[] = [];
+	const used = new Set<string>();
+
+	// Priority 1: archetype-specific (affinity >= 10)
+	const archetypeSpecific = allCandidates
+		.filter(h => h.affinity >= 10)
+		.sort((a, b) => b.affinity - a.affinity);
+	for (const h of archetypeSpecific.slice(0, 2)) {
+		hooks.push(h);
+		used.add(h.eventId);
+	}
+
+	// Priority 2: high-tension storylines
+	const urgent = allCandidates
+		.filter(h => !used.has(h.eventId) && h.tension >= 50 && h.storyline)
+		.sort((a, b) => b.tension - a.tension);
+	for (const h of urgent.slice(0, 2)) {
+		hooks.push(h);
+		used.add(h.eventId);
+	}
+
+	// Priority 3: best remaining by combined score (affinity + tension)
+	const remaining = allCandidates
+		.filter(h => !used.has(h.eventId))
+		.sort((a, b) => (b.affinity + b.tension) - (a.affinity + a.tension) || Math.random() - 0.5);
+	for (const h of remaining) {
+		if (hooks.length >= 5) break;
+		// Skip generic (affinity 0) storyline events if we already have enough hooks
+		if (h.affinity === 0 && h.storyline && hooks.length >= 3) continue;
+		hooks.push(h);
+		used.add(h.eventId);
+	}
+
+	// Ensure at least 2 hooks
+	if (hooks.length < 2) {
+		for (const h of allCandidates) {
+			if (hooks.length >= 2) break;
+			if (!used.has(h.eventId)) {
+				hooks.push(h);
+				used.add(h.eventId);
+			}
+		}
+	}
+
+	// Sort final list: archetype-specific first, then by tension
+	hooks.sort((a, b) => {
+		const aSpec = a.affinity >= 10 ? 1 : 0;
+		const bSpec = b.affinity >= 10 ? 1 : 0;
+		if (aSpec !== bSpec) return bSpec - aSpec;
+		return b.tension - a.tension;
+	});
+
+	// Strip internal affinity field before returning
+	return hooks.map(({ affinity: _, ...hook }) => hook as Hook);
 }
