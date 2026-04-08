@@ -121,6 +121,7 @@ export function buildWorldStateFromFiles(files: Map<string, string>, config: Wor
 	let worldFacts: Record<string, string | number | boolean> = {};
 	let playedCharacterIds: string[] = [];
 	let recentEventIds: string[] = [];
+	let storylineStates: Record<string, import('../types/storyline').StorylineState> = {};
 
 	for (const [path, content] of files) {
 		if (path.startsWith('state/characters/')) {
@@ -159,7 +160,8 @@ export function buildWorldStateFromFiles(files: Map<string, string>, config: Wor
 		locations,
 		playedCharacterIds,
 		recentEventIds,
-		worldFacts
+		worldFacts,
+		storylineStates
 	};
 }
 

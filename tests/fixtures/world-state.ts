@@ -71,6 +71,7 @@ export function createTestWorldState(): WorldState {
 		locations: allLocationInstances.map(l => ({ ...l })),
 		playedCharacterIds: [],
 		recentEventIds: [],
-		worldFacts: {}
+		worldFacts: {},
+		storylineStates: {}
 	};
 }

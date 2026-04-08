@@ -44,7 +44,8 @@ export function initializeWorldState(blocks: WorldBlocks): WorldState {
 		locations,
 		playedCharacterIds: [],
 		recentEventIds: [],
-		worldFacts: {}
+		worldFacts: {},
+		storylineStates: {}
 	};
 }
 

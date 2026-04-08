@@ -80,6 +80,7 @@ export interface WorldState {
 	playedCharacterIds: string[];
 	recentEventIds: string[];
 	worldFacts: Record<string, string | number | boolean>;
+	storylineStates: Record<string, import('./storyline').StorylineState>;
 }
 
 export interface LocationInstance {

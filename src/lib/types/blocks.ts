@@ -53,6 +53,8 @@ export interface Consequence {
 	axis?: string;
 }
 
+import type { EscalationConfig } from './storyline';
+
 /** A thing that can happen — "bandit raid", "harvest festival" */
 export interface EventTemplate {
 	id: string;
@@ -62,6 +64,10 @@ export interface EventTemplate {
 	roles: Role[];
 	entryNodeId: string;
 	nodes: Record<string, ChoiceNode>;
+	storyline?: string;
+	chapter?: number;
+	reentry_recap?: string;
+	escalation?: EscalationConfig;
 }
 
 export interface EventPrecondition {

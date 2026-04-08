@@ -72,7 +72,8 @@ export function createWorldSnapshotAt(
 		locations,
 		playedCharacterIds: [...worldState.playedCharacterIds],
 		recentEventIds: [...(worldState.recentEventIds ?? [])],
-		worldFacts: { ...(worldState.worldFacts ?? {}) }
+		worldFacts: { ...(worldState.worldFacts ?? {}) },
+		storylineStates: { ...(worldState.storylineStates ?? {}) }
 	};
 }
 
