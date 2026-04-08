@@ -2,9 +2,6 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { worldState, worldBlocks } from '$lib/stores/world';
-	import { playSession } from '$lib/stores/session';
-	import { collapseAllRoles } from '$lib/engine/collapse';
-	import { selectEvent } from '$lib/engine/event-selector';
 	import { navigationContext } from '$lib/stores/navigation';
 	import { createWorldSnapshotAt, generatePastDate, generateFutureDate } from '$lib/engine/timeline';
 	import type { Archetype } from '$lib/types/blocks';
@@ -271,58 +268,19 @@
 	) {
 		if (!blocks || !activeState) return;
 
-		const event = selectEvent(
-			blocks.events,
-			activeState,
-			date.season,
-			selectedDayTypes,
-			blocks.questlines
-		);
-
-		if (!event) {
-			goto(`${base}/journal`);
-			return;
-		}
-
-		const collapseResults = collapseAllRoles(
-			event.roles,
-			activeState.characters,
-			blocks.archetypes,
-			[character.id]
-		);
-
-		for (const result of collapseResults) {
-			if (result.wasNewlyCreated && result.newCharacter) {
-				activeState.characters.push(result.newCharacter);
-			}
-		}
-
-		const collapsedRoles = collapseResults.map(r => ({
-			roleId: r.roleId,
-			characterId: r.characterId,
-			characterName: r.characterName,
-			wasNewlyCreated: r.wasNewlyCreated
-		}));
-
-		const session = {
-			characterId: character.id,
-			date,
-			eventTemplateId: event.id,
-			collapsedRoles,
-			currentNodeId: event.entryNodeId,
-			choiceLog: [],
-			exhaustion: 0,
-			maxExhaustion: 10,
-			isDead: false,
-			isComplete: false,
-			dayTypePreferences: selectedDayTypes,
-			timeContext
-		};
-
+		// Save state with character included
 		worldState.set(activeState);
-		playSession.set(session);
-		navigationContext.set({ mode: 'new', timeContext: 'present' });
-		goto(`${base}/journal`);
+		saveWorldState(activeState);
+
+		// Set navigation context for morning menu
+		navigationContext.set({
+			mode: 'pre-selected',
+			characterId: character.id,
+			targetDate: date,
+			timeContext
+		});
+
+		goto(`${base}/journal/morning`);
 	}
 
 	let refreshing = $state(false);
