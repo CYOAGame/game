@@ -1,5 +1,5 @@
 import type { EventTemplate, Questline } from '../types/blocks';
-import type { WorldState } from '../types/state';
+import type { WorldState, Character } from '../types/state';
 import type { StorylineState, Hook } from '../types/storyline';
 import { filterEvents } from './event-selector';
 
@@ -82,6 +82,57 @@ export function escalateStorylines(
 	return { updatedStates, newWorldFacts, escalatedStoryline, npcDriverId };
 }
 
+/**
+ * Score how well an event matches a character's archetype and skills.
+ * Higher = better match. 0 = generic event with no special affinity.
+ */
+function archetypeAffinity(event: EventTemplate, character: Character): number {
+	let score = 0;
+
+	// Check if event has archetype precondition matching this character
+	for (const pre of event.preconditions) {
+		if (pre.type === 'archetype') {
+			score += 10; // This event was MADE for this archetype
+		}
+		if (pre.type === 'skill') {
+			if (character.skills.includes(pre.key)) score += 5;
+		}
+	}
+
+	// Check tag overlap with archetype's typical activities
+	const archetypeTagMap: Record<string, string[]> = {
+		blacksmith: ['crafting', 'commerce'],
+		merchant: ['commerce', 'social', 'intrigue'],
+		soldier: ['action', 'combat'],
+		farmer: ['rural', 'social'],
+		scholar: ['intrigue', 'exploration'],
+		healer: ['social'],
+		innkeeper: ['social', 'intrigue'],
+		thief: ['intrigue', 'action'],
+		noble: ['intrigue', 'social'],
+		priest: ['social'],
+		hunter: ['action', 'exploration'],
+		baker: ['crafting', 'commerce', 'social'],
+		brewer: ['crafting', 'commerce', 'social'],
+		guard: ['action', 'combat'],
+		archer: ['action', 'combat', 'exploration'],
+		knight: ['action', 'combat'],
+		scout: ['exploration', 'action'],
+		bard: ['social', 'romance'],
+		courier: ['action', 'exploration'],
+		gravedigger: ['intrigue', 'exploration'],
+		smuggler: ['intrigue', 'action'],
+		fisherman: ['exploration'],
+		miner: ['exploration', 'crafting'],
+	};
+	const affinityTags = archetypeTagMap[character.archetypeId] ?? [];
+	for (const tag of event.tags) {
+		if (affinityTags.includes(tag)) score += 2;
+	}
+
+	return score;
+}
+
 export function generateHooks(
 	events: EventTemplate[],
 	world: WorldState,
@@ -90,6 +141,15 @@ export function generateHooks(
 	questlines: Questline[]
 ): Hook[] {
 	const eligible = filterEvents(events, world, currentSeason, questlines, characterId);
+	const character = world.characters.find(c => c.id === characterId);
+
+	// Track which events this character has already played (from timeline)
+	const playedEventIds = new Set(
+		world.timeline
+			.filter(e => e.characterId === characterId)
+			.map(e => e.eventTemplateId)
+	);
+
 	const storylineGroups: Record<string, EventTemplate[]> = {};
 	const standalones: EventTemplate[] = [];
 
@@ -104,6 +164,7 @@ export function generateHooks(
 
 	const hooks: Hook[] = [];
 
+	// Storyline hooks
 	for (const [storyline, chapters] of Object.entries(storylineGroups)) {
 		const slState = world.storylineStates?.[storyline];
 		const currentChapter = slState?.currentChapter ?? 1;
@@ -113,25 +174,45 @@ export function generateHooks(
 			.sort((a, b) => (b.chapter ?? 1) - (a.chapter ?? 1));
 		const best = sorted[0];
 		if (!best) continue;
+
+		// Skip if this character already played this exact event
+		if (playedEventIds.has(best.id)) continue;
+
+		const affinity = character ? archetypeAffinity(best, character) : 0;
 		const teaserText = best.nodes[best.entryNodeId]?.text?.slice(0, 150) ?? best.name;
 		hooks.push({
 			eventId: best.id, storyline, chapter: best.chapter ?? null,
-			teaserText, tension, urgency: tensionToUrgency(tension),
+			teaserText, tension: tension + affinity, // affinity boosts effective tension for sorting
+			urgency: tensionToUrgency(tension),
 			isStorylineContinuation: slState?.lastPlayerSession !== null && slState?.lastPlayerSession !== undefined,
 			reentryRecap: best.reentry_recap ?? null
 		});
 	}
 
-	const shuffled = standalones.sort(() => Math.random() - 0.5);
-	for (const event of shuffled.slice(0, 3)) {
+	// Standalone hooks - prioritize archetype-matched events
+	const scored = standalones
+		.filter(e => !playedEventIds.has(e.id))
+		.map(event => ({
+			event,
+			affinity: character ? archetypeAffinity(event, character) : 0
+		}))
+		.sort((a, b) => b.affinity - a.affinity || Math.random() - 0.5);
+
+	// Take top archetype-matched standalones (up to 2) plus 1 random
+	const archetypeMatched = scored.filter(s => s.affinity > 0).slice(0, 2);
+	const generic = scored.filter(s => s.affinity === 0).slice(0, 1);
+	const standaloneHooks = [...archetypeMatched, ...generic];
+
+	for (const { event, affinity } of standaloneHooks) {
 		const teaserText = event.nodes[event.entryNodeId]?.text?.slice(0, 150) ?? event.name;
 		hooks.push({
 			eventId: event.id, storyline: null, chapter: null,
-			teaserText, tension: 0, urgency: 'calm',
+			teaserText, tension: affinity, urgency: 'calm',
 			isStorylineContinuation: false, reentryRecap: null
 		});
 	}
 
+	// Sort: highest tension/affinity first
 	hooks.sort((a, b) => b.tension - a.tension);
 	return hooks;
 }
