@@ -127,11 +127,39 @@
 			? state.playedCharacterIds
 			: [...state.playedCharacterIds, session.characterId];
 
-		const updated = {
+		let updated = {
 			...state,
 			timeline: [...state.timeline, entry],
 			playedCharacterIds: playedIds
 		};
+
+		// Update storyline tension
+		const blocks = $worldBlocks;
+		if (blocks && session) {
+			const playedEvent = blocks.events.find(e => e.id === session!.eventTemplateId);
+			const playedStoryline = playedEvent?.storyline;
+
+			const updatedStorylines = { ...(updated.storylineStates ?? {}) };
+
+			for (const [name, slState] of Object.entries(updatedStorylines)) {
+				if (name === playedStoryline) {
+					updatedStorylines[name] = {
+						...slState,
+						tension: 0,
+						lastPlayerSession: entry.id
+					};
+				} else {
+					const bump = 2 + Math.floor(Math.random() * 4); // +2 to +5
+					updatedStorylines[name] = {
+						...slState,
+						tension: Math.min(100, slState.tension + bump)
+					};
+				}
+			}
+
+			updated = { ...updated, storylineStates: updatedStorylines };
+		}
+
 		worldState.set(updated);
 		saveWorldState(updated);
 
