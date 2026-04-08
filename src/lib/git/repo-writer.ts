@@ -33,6 +33,9 @@ export function serializeWorldStateToFiles(state: WorldState): Map<string, strin
 	// Recent event ids
 	files.set('state/recent-events.yaml', yaml.dump(state.recentEventIds));
 
+	// Storyline states
+	files.set('state/storylines.yaml', yaml.dump(state.storylineStates ?? {}));
+
 	return files;
 }
 

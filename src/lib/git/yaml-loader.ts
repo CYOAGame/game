@@ -148,6 +148,9 @@ export function buildWorldStateFromFiles(files: Map<string, string>, config: Wor
 		} else if (path === 'state/recent-events.yaml') {
 			const parsed = parseYamlContent<string[]>(content);
 			if (Array.isArray(parsed)) recentEventIds = parsed;
+		} else if (path === 'state/storylines.yaml') {
+			const parsed = parseYamlContent<Record<string, import('../types/storyline').StorylineState>>(content);
+			if (parsed && typeof parsed === 'object') storylineStates = parsed;
 		}
 	}
 

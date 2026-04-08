@@ -98,6 +98,9 @@ export function loadWorldState(): WorldState | null {
 	if (!state.worldFacts) {
 		(state as any).worldFacts = {};
 	}
+	if (!state.storylineStates) {
+		(state as any).storylineStates = {};
+	}
 
 	return state;
 }
