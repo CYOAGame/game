@@ -133,6 +133,18 @@ function archetypeAffinity(event: EventTemplate, character: Character): number {
 	return score;
 }
 
+/**
+ * Clean teaser text: replace {role.name} placeholders with generic descriptions
+ * since roles aren't collapsed yet at hook generation time.
+ */
+function cleanTeaserText(text: string): string {
+	return text
+		.replace(/\{(\w+)\.name\}/g, 'someone')
+		.replace(/\{(\w+)\.archetype\}/g, 'a local')
+		.replace(/\{(\w+)\.\w+\}/g, '')
+		.slice(0, 150);
+}
+
 export function generateHooks(
 	events: EventTemplate[],
 	world: WorldState,
@@ -178,7 +190,7 @@ export function generateHooks(
 		if (playedEventIds.has(best.id)) continue;
 
 		const affinity = character ? archetypeAffinity(best, character) : 0;
-		const teaserText = best.nodes[best.entryNodeId]?.text?.slice(0, 150) ?? best.name;
+		const teaserText = cleanTeaserText(best.nodes[best.entryNodeId]?.text ?? best.name);
 		allCandidates.push({
 			eventId: best.id, storyline, chapter: best.chapter ?? null,
 			teaserText, tension, urgency: tensionToUrgency(tension),
@@ -192,7 +204,7 @@ export function generateHooks(
 	for (const event of standalones) {
 		if (playedEventIds.has(event.id)) continue;
 		const affinity = character ? archetypeAffinity(event, character) : 0;
-		const teaserText = event.nodes[event.entryNodeId]?.text?.slice(0, 150) ?? event.name;
+		const teaserText = cleanTeaserText(event.nodes[event.entryNodeId]?.text ?? event.name);
 		allCandidates.push({
 			eventId: event.id, storyline: null, chapter: null,
 			teaserText, tension: 0, urgency: 'calm',
@@ -234,9 +246,9 @@ export function generateHooks(
 		.filter(h => !used.has(h.eventId))
 		.sort((a, b) => (b.affinity + b.tension) - (a.affinity + a.tension) || Math.random() - 0.5);
 	for (const h of remaining) {
-		if (hooks.length >= 5) break;
-		// Skip generic (affinity 0) storyline events if we already have enough hooks
-		if (h.affinity === 0 && h.storyline && hooks.length >= 3) continue;
+		if (hooks.length >= 4) break;
+		// Skip generic (affinity 0) storyline events if we already have archetype matches
+		if (h.affinity === 0 && h.storyline && hooks.length >= 2) continue;
 		hooks.push(h);
 		used.add(h.eventId);
 	}
