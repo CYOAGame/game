@@ -246,9 +246,9 @@ export function generateHooks(
 		.filter(h => !used.has(h.eventId))
 		.sort((a, b) => (b.affinity + b.tension) - (a.affinity + a.tension) || Math.random() - 0.5);
 	for (const h of remaining) {
-		if (hooks.length >= 4) break;
-		// Skip generic (affinity 0) storyline events if we already have archetype matches
-		if (h.affinity === 0 && h.storyline && hooks.length >= 2) continue;
+		if (hooks.length >= 3) break;
+		// Skip zero-affinity storyline events entirely unless we have nothing else
+		if (h.affinity === 0 && h.storyline) continue;
 		hooks.push(h);
 		used.add(h.eventId);
 	}
