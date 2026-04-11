@@ -14,6 +14,7 @@
 		denyJoinRequest,
 		type JoinRequest
 	} from '$lib/invites/invite-client';
+	import { buildJoinRequestUrl } from '$lib/invites/invite-url';
 	import { onMount } from 'svelte';
 
 	let ghState = $derived($githubState);
@@ -33,6 +34,11 @@
 	let recentRepo = $state('');
 	let loadingRecent = $state(false);
 	let recentError = $state('');
+
+	// Not-a-collaborator panel state
+	let showRequestAccess = $state(false);
+	let requestAccessOwner = $state('');
+	let requestAccessRepo = $state('');
 
 	// Pending invites state
 	let pendingInvites = $state<JoinRequest[]>([]);
@@ -134,6 +140,17 @@
 				goto(`${base}/login`);
 				return;
 			}
+			const validation = await validateRepo(tkn, 'CYOAGame', 'Public_Game');
+			if (!validation.valid) {
+				joinError = validation.error ?? 'Public world unreachable.';
+				return;
+			}
+			if (!validation.canWrite) {
+				requestAccessOwner = 'CYOAGame';
+				requestAccessRepo = 'Public_Game';
+				showRequestAccess = true;
+				return;
+			}
 			await connectToRepo('CYOAGame', 'Public_Game');
 		} catch (err: any) {
 			if (err instanceof AuthExpiredError) {
@@ -165,6 +182,13 @@
 				joinError = validation.error ?? 'Repository not valid.';
 				return;
 			}
+			if (!validation.canWrite) {
+				// Not a collaborator yet — show request access panel
+				requestAccessOwner = parsed.owner;
+				requestAccessRepo = parsed.repo;
+				showRequestAccess = true;
+				return;
+			}
 			await connectToRepo(parsed.owner, parsed.repo);
 		} catch (err: any) {
 			if (err instanceof AuthExpiredError) {
@@ -175,6 +199,18 @@
 		} finally {
 			joining = false;
 		}
+	}
+
+	function openRequestAccess() {
+		const appUrl = typeof window !== 'undefined' ? window.location.origin + base + '/' : '';
+		const url = buildJoinRequestUrl(requestAccessOwner, requestAccessRepo, appUrl);
+		window.open(url, '_blank', 'noopener');
+	}
+
+	function closeRequestAccess() {
+		showRequestAccess = false;
+		requestAccessOwner = '';
+		requestAccessRepo = '';
 	}
 
 	async function handleRecentWorld() {
@@ -340,6 +376,30 @@
 				{#if inviteActionError}
 					<p class="error-msg">{inviteActionError}</p>
 				{/if}
+			</section>
+		{/if}
+
+		<!-- Request Access Panel -->
+		{#if showRequestAccess}
+			<section class="section request-access-section">
+				<h2 class="section-title">Not a collaborator yet</h2>
+				<p class="section-desc">
+					You're not a collaborator on <code>{requestAccessOwner}/{requestAccessRepo}</code> yet.
+					Click <strong>Request access</strong> to open a pre-filled join request on GitHub.
+					The world owner will review it.
+				</p>
+				<p class="section-desc">
+					Once approved, GitHub will email you a collaborator invite. Accept it there, then
+					come back here and try again.
+				</p>
+				<div class="invite-actions">
+					<button class="btn btn-primary" onclick={openRequestAccess}>
+						Request access
+					</button>
+					<button class="btn btn-secondary" onclick={closeRequestAccess}>
+						Cancel
+					</button>
+				</div>
 			</section>
 		{/if}
 
