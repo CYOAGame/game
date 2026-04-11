@@ -1,0 +1,11 @@
+# Cloudflare Worker config for the GitHub OAuth token exchange.
+# See tools/README.md for deployment instructions.
+
+name = "cyoagame-oauth-worker"
+main = "oauth-worker.js"
+compatibility_date = "2026-04-11"
+
+# Set via `wrangler secret put`:
+#   GITHUB_CLIENT_ID      — from your GitHub OAuth App
+#   GITHUB_CLIENT_SECRET  — from your GitHub OAuth App
+#   APP_URL               — https://cyoagame.github.io/game
