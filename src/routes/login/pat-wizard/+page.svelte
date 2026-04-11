@@ -185,6 +185,10 @@
 							<li><strong>Contents:</strong> Read and write</li>
 							<li><strong>Metadata:</strong> Read (already required)</li>
 							<li><strong>Pull requests:</strong> Read and write</li>
+							<li>
+								<strong>Administration:</strong> Read and write
+								<em>(optional — only needed if you plan to approve join requests from other players for this repo)</em>
+							</li>
 						</ul>
 					</li>
 					<li>Click <strong>Generate token</strong> and paste it below.</li>
