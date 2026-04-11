@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { worldState, worldBlocks } from '$lib/stores/world';
-	import { githubState, saveGitHubState } from '$lib/stores/github';
+	import { githubState, saveGitHubState, clearAuth } from '$lib/stores/github';
 	import { playerPrefs, savePlayerPrefs, loadPlayerPrefs } from '$lib/stores/player';
 	import { parseRepoUrl, validateRepo, forkRepo, checkForkStatus, syncFork } from '$lib/git/github-client';
 	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles } from '$lib/git/yaml-loader';
@@ -11,7 +11,6 @@
 
 	let ghState = $derived($githubState);
 	let username = $derived(ghState.username);
-	let token = $derived(ghState.token);
 
 	// Create World state
 	let forking = $state(false);
@@ -35,11 +34,11 @@
 	let syncResult = $state<'idle' | 'success' | 'error'>('idle');
 
 	onMount(() => {
-		const prefs = loadPlayerPrefs();
-		if (!prefs.githubToken) {
+		if (!$githubState.token) {
 			goto(`${base}/login`);
 			return;
 		}
+		const prefs = loadPlayerPrefs();
 		if (prefs.repoOwner && prefs.repoName) {
 			recentOwner = prefs.repoOwner;
 			recentRepo = prefs.repoName;
@@ -47,8 +46,7 @@
 	});
 
 	async function connectToRepo(owner: string, repo: string) {
-		const prefs = loadPlayerPrefs();
-		const tkn = prefs.githubToken ?? token;
+		const tkn = $githubState.token;
 		if (!tkn) {
 			goto(`${base}/login`);
 			return;
@@ -85,18 +83,18 @@
 	}
 
 	async function handleCreateWorld() {
+		if ($githubState.authMethod === 'pat') {
+			forkError = 'Create World requires "Login with GitHub". Log out and use the OAuth path, or create your world via the PAT wizard during login.';
+			return;
+		}
 		forking = true;
 		forkError = '';
 		try {
-			const prefs = loadPlayerPrefs();
-			const tkn = prefs.githubToken ?? token;
-			if (!tkn) {
-				goto(`${base}/login`);
-				return;
-			}
+			const tkn = $githubState.token;
+			if (!tkn) { goto(`${base}/login`); return; }
 			const result = await forkRepo(tkn, 'CYOAGame', 'ironhaven');
 			if (!result) {
-				forkError = 'Template repo not found. Ask the admin to set up CYOAGame/ironhaven.';
+				forkError = 'Template repo not found or forbidden. If you authenticated with a fine-grained PAT, use the PAT wizard instead.';
 				return;
 			}
 			await connectToRepo(result.owner, result.repo);
@@ -111,8 +109,7 @@
 		joinError = '';
 		joining = true;
 		try {
-			const prefs = loadPlayerPrefs();
-			const tkn = prefs.githubToken ?? token;
+			const tkn = $githubState.token;
 			if (!tkn) {
 				goto(`${base}/login`);
 				return;
@@ -134,8 +131,7 @@
 		}
 		joining = true;
 		try {
-			const prefs = loadPlayerPrefs();
-			const tkn = prefs.githubToken ?? token;
+			const tkn = $githubState.token;
 			if (!tkn) {
 				goto(`${base}/login`);
 				return;
@@ -166,13 +162,15 @@
 	}
 
 	async function handleSync() {
-		const prefs = loadPlayerPrefs();
-		if (!prefs.githubToken || !prefs.repoOwner || !prefs.repoName) return;
+		const tkn = $githubState.token;
+		const owner = $githubState.repoOwner;
+		const repo = $githubState.repoName;
+		if (!tkn || !owner || !repo) return;
 		syncingFork = true;
-		const result = await syncFork(prefs.githubToken, prefs.repoOwner, prefs.repoName);
+		const result = await syncFork(tkn, owner, repo);
 		if (result.success) {
 			syncResult = 'success';
-			const files = await fetchRepoFiles(prefs.githubToken!, prefs.repoOwner!, prefs.repoName!);
+			const files = await fetchRepoFiles(tkn, owner, repo);
 			const blocks = buildWorldBlocksFromFiles(files);
 			const state = buildWorldStateFromFiles(files, blocks.config);
 			cacheFiles(files);
@@ -194,17 +192,8 @@
 
 	function handleLogout() {
 		const prefs = loadPlayerPrefs();
-		savePlayerPrefs({ ...prefs, githubToken: undefined, githubUsername: undefined, repoOwner: undefined, repoName: undefined });
-		githubState.set({
-			isAuthenticated: false,
-			username: '',
-			token: '',
-			repoOwner: '',
-			repoName: '',
-			isConnected: false,
-			syncStatus: 'idle',
-			pendingChanges: []
-		});
+		savePlayerPrefs({ ...prefs, repoOwner: undefined, repoName: undefined });
+		clearAuth();
 		goto(`${base}/login`);
 	}
 </script>

@@ -5,8 +5,8 @@
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { initializeWorldState, loadWorldState, loadWorldBlocks, saveWorldState, saveWorldBlocks } from '$lib/engine/world-loader';
 	import type { WorldBlocks } from '$lib/engine/world-loader';
-	import { playerPrefs, loadPlayerPrefs, savePlayerPrefs } from '$lib/stores/player';
-	import { githubState } from '$lib/stores/github';
+	import { loadPlayerPrefs } from '$lib/stores/player';
+	import { githubState, clearAuth } from '$lib/stores/github';
 	import { validateToken, checkForkStatus } from '$lib/git/github-client';
 	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles, loadCachedFiles } from '$lib/git/yaml-loader';
 	import { onMount } from 'svelte';
@@ -35,13 +35,14 @@
 		}
 
 		const prefs = loadPlayerPrefs();
-		if (prefs.githubToken) {
-			const result = await validateToken(prefs.githubToken);
+		const token = $githubState.token;
+		if (token) {
+			const result = await validateToken(token);
 			if (result.valid) {
 				if (prefs.repoOwner && prefs.repoName) {
 					authMode = 'github-ready';
 					// Background check for upstream updates
-					checkForkStatus(prefs.githubToken!, prefs.repoOwner, prefs.repoName).then(status => {
+					checkForkStatus(token, prefs.repoOwner, prefs.repoName).then(status => {
 						if (status?.behind) updateAvailable = true;
 					});
 				} else {
@@ -50,8 +51,7 @@
 				}
 			} else {
 				// Token invalid — clear it and redirect to login
-				savePlayerPrefs({ ...prefs, githubToken: undefined, githubUsername: undefined });
-				playerPrefs.update(p => ({ ...p, githubToken: undefined, githubUsername: undefined }));
+				clearAuth();
 				goto(`${base}/login`);
 				return;
 			}
@@ -66,14 +66,15 @@
 
 	async function continueFromGitHub() {
 		const prefs = loadPlayerPrefs();
-		if (!prefs.githubToken || !prefs.repoOwner || !prefs.repoName) {
+		const token = $githubState.token;
+		if (!token || !prefs.repoOwner || !prefs.repoName) {
 			goto(`${base}/connect`);
 			return;
 		}
 		// Always fetch fresh from repo (cache may be stale after upstream sync)
 		let files: Map<string, string>;
 		try {
-			files = await fetchRepoFiles(prefs.githubToken, prefs.repoOwner, prefs.repoName);
+			files = await fetchRepoFiles(token, prefs.repoOwner, prefs.repoName);
 			cacheFiles(files);
 		} catch {
 			// Offline fallback — use cache
@@ -93,8 +94,6 @@
 		githubState.update(s => ({
 			...s,
 			isAuthenticated: true,
-			username: prefs.githubUsername ?? '',
-			token: prefs.githubToken!,
 			repoOwner: prefs.repoOwner!,
 			repoName: prefs.repoName!,
 			isConnected: true

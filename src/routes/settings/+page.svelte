@@ -4,7 +4,7 @@
 	import { playerPrefs, loadPlayerPrefs, savePlayerPrefs } from '$lib/stores/player';
 	import { enhanceText, type LLMContext } from '$lib/engine/llm-adapter';
 	import type { PlayerPrefs } from '$lib/stores/player';
-	import { githubState, saveGitHubState } from '$lib/stores/github';
+	import { githubState, clearAuth } from '$lib/stores/github';
 	import { commitFiles, getPendingChanges } from '$lib/git/repo-writer';
 
 	let prefs = $state<PlayerPrefs>({
@@ -105,28 +105,9 @@
 
 	function handleDisconnect() {
 		const current = loadPlayerPrefs();
-		savePlayerPrefs({ ...current, githubToken: undefined, githubUsername: undefined, repoOwner: undefined, repoName: undefined });
-		playerPrefs.update(p => ({ ...p, githubToken: undefined, githubUsername: undefined, repoOwner: undefined, repoName: undefined }));
-		githubState.set({
-			isAuthenticated: false,
-			username: '',
-			token: '',
-			repoOwner: '',
-			repoName: '',
-			isConnected: false,
-			syncStatus: 'idle',
-			pendingChanges: []
-		});
-		saveGitHubState({
-			isAuthenticated: false,
-			username: '',
-			token: '',
-			repoOwner: '',
-			repoName: '',
-			isConnected: false,
-			syncStatus: 'idle',
-			pendingChanges: []
-		});
+		savePlayerPrefs({ ...current, repoOwner: undefined, repoName: undefined });
+		playerPrefs.update(p => ({ ...p, repoOwner: undefined, repoName: undefined }));
+		clearAuth();
 	}
 </script>
 
