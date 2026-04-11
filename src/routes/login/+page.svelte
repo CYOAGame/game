@@ -5,10 +5,17 @@
 	import { validateToken } from '$lib/git/github-client';
 	import { githubState, saveGitHubState, clearAuth } from '$lib/stores/github';
 	import { onMount } from 'svelte';
-	import { env as publicEnv } from '$env/dynamic/public';
+	// Use $env/static/public (not dynamic) so the values are inlined directly
+	// into the content-hashed JS chunk at build time. This avoids the cache
+	// problem with dynamic-public's separate /_app/env.js module, which is
+	// served with a 10-minute max-age by GitHub Pages — meaning a fresh
+	// client ID or worker URL wouldn't reach users until the TTL expired.
+	// Content-hashed chunks, in contrast, force an immediate fetch of the
+	// new bundle on any deploy.
+	import { PUBLIC_GITHUB_CLIENT_ID, PUBLIC_OAUTH_WORKER_URL } from '$env/static/public';
 
-	const CLIENT_ID = publicEnv.PUBLIC_GITHUB_CLIENT_ID ?? '';
-	const WORKER_URL = publicEnv.PUBLIC_OAUTH_WORKER_URL ?? '';
+	const CLIENT_ID = PUBLIC_GITHUB_CLIENT_ID ?? '';
+	const WORKER_URL = PUBLIC_OAUTH_WORKER_URL ?? '';
 	const OAUTH_CONFIGURED = Boolean(CLIENT_ID && WORKER_URL);
 
 	let connecting = $state(false);
