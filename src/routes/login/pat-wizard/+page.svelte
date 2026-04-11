@@ -210,6 +210,11 @@
 					</button>
 				</div>
 			</section>
+		{:else}
+			<section class="section">
+				<h2 class="section-title">Connecting...</h2>
+				<p class="section-desc">Taking you to your world.</p>
+			</section>
 		{/if}
 
 		<div class="footer-links">

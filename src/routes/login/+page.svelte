@@ -188,7 +188,7 @@
 		margin: 0;
 	}
 	.section-desc { font-size: 0.85rem; opacity: 0.65; line-height: 1.6; margin: 0; }
-	.section-desc code, .oauth-note code {
+	.oauth-note code {
 		font-family: monospace;
 		background: rgba(255, 255, 255, 0.07);
 		padding: 0.1em 0.3em;

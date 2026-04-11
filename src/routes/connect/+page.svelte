@@ -7,6 +7,7 @@
 	import { parseRepoUrl, validateRepo, forkRepo, checkForkStatus, syncFork } from '$lib/git/github-client';
 	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles } from '$lib/git/yaml-loader';
 	import { saveWorldState, saveWorldBlocks } from '$lib/engine/world-loader';
+	import { AuthExpiredError } from '$lib/git/auth-errors';
 	import { onMount } from 'svelte';
 
 	let ghState = $derived($githubState);
@@ -99,6 +100,10 @@
 			}
 			await connectToRepo(result.owner, result.repo);
 		} catch (err: any) {
+			if (err instanceof AuthExpiredError) {
+				goto(`${base}/login?error=expired`);
+				return;
+			}
 			forkError = err?.message ?? 'Fork failed. Please try again.';
 		} finally {
 			forking = false;
@@ -116,6 +121,10 @@
 			}
 			await connectToRepo('CYOAGame', 'Public_Game');
 		} catch (err: any) {
+			if (err instanceof AuthExpiredError) {
+				goto(`${base}/login?error=expired`);
+				return;
+			}
 			joinError = err?.message ?? 'Failed to connect to public world.';
 		} finally {
 			joining = false;
@@ -143,6 +152,10 @@
 			}
 			await connectToRepo(parsed.owner, parsed.repo);
 		} catch (err: any) {
+			if (err instanceof AuthExpiredError) {
+				goto(`${base}/login?error=expired`);
+				return;
+			}
 			joinError = err?.message ?? 'Failed to connect to repository.';
 		} finally {
 			joining = false;
@@ -155,6 +168,10 @@
 		try {
 			await connectToRepo(recentOwner, recentRepo);
 		} catch (err: any) {
+			if (err instanceof AuthExpiredError) {
+				goto(`${base}/login?error=expired`);
+				return;
+			}
 			recentError = err?.message ?? 'Failed to load recent world.';
 		} finally {
 			loadingRecent = false;

@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { playerPrefs, loadPlayerPrefs, savePlayerPrefs } from '$lib/stores/player';
 	import { enhanceText, type LLMContext } from '$lib/engine/llm-adapter';
 	import type { PlayerPrefs } from '$lib/stores/player';
 	import { githubState, clearAuth } from '$lib/stores/github';
 	import { commitFiles, getPendingChanges } from '$lib/git/repo-writer';
+	import { AuthExpiredError } from '$lib/git/auth-errors';
 
 	let prefs = $state<PlayerPrefs>({
 		dayTypePreferences: [],
@@ -98,6 +100,10 @@
 			syncNowStatus = 'done';
 			syncNowMessage = `Synced ${pending.length} pending ${pending.length === 1 ? 'batch' : 'batches'}.`;
 		} catch (err: any) {
+			if (err instanceof AuthExpiredError) {
+				goto(`${base}/login?error=expired`);
+				return;
+			}
 			syncNowStatus = 'error';
 			syncNowMessage = err?.message ?? 'Sync failed.';
 		}
