@@ -39,6 +39,7 @@
 	let showRequestAccess = $state(false);
 	let requestAccessOwner = $state('');
 	let requestAccessRepo = $state('');
+	let requestAccessBlockedUrl = $state<string>('');
 
 	// Pending invites state
 	let pendingInvites = $state<JoinRequest[]>([]);
@@ -201,16 +202,42 @@
 		}
 	}
 
+	function formatRelativeTime(iso: string): string {
+		if (!iso) return '';
+		try {
+			const then = new Date(iso).getTime();
+			const now = Date.now();
+			const diffSec = Math.floor((now - then) / 1000);
+			if (diffSec < 60) return 'just now';
+			const diffMin = Math.floor(diffSec / 60);
+			if (diffMin < 60) return `${diffMin}m ago`;
+			const diffHour = Math.floor(diffMin / 60);
+			if (diffHour < 24) return `${diffHour}h ago`;
+			const diffDay = Math.floor(diffHour / 24);
+			if (diffDay < 30) return `${diffDay}d ago`;
+			return new Date(iso).toLocaleDateString();
+		} catch {
+			return '';
+		}
+	}
+
 	function openRequestAccess() {
 		const appUrl = typeof window !== 'undefined' ? window.location.origin + base + '/' : '';
 		const url = buildJoinRequestUrl(requestAccessOwner, requestAccessRepo, appUrl);
-		window.open(url, '_blank', 'noopener');
+		const w = window.open(url, '_blank', 'noopener');
+		if (!w) {
+			// Popup blocked — surface a manual link
+			requestAccessBlockedUrl = url;
+		} else {
+			requestAccessBlockedUrl = '';
+		}
 	}
 
 	function closeRequestAccess() {
 		showRequestAccess = false;
 		requestAccessOwner = '';
 		requestAccessRepo = '';
+		requestAccessBlockedUrl = '';
 	}
 
 	async function handleRecentWorld() {
@@ -289,11 +316,19 @@
 
 	async function handleApprove(req: JoinRequest) {
 		inviteActionError = '';
-		const result = await approveJoinRequest($githubState.token, req);
-		if (result.success) {
-			await pollInvites();
-		} else {
-			inviteActionError = result.error ?? 'Approve failed';
+		try {
+			const result = await approveJoinRequest($githubState.token, req);
+			if (result.success) {
+				await pollInvites();
+			} else {
+				inviteActionError = result.error ?? 'Approve failed';
+			}
+		} catch (err) {
+			if (err instanceof AuthExpiredError) {
+				goto(`${base}/login?error=expired`);
+				return;
+			}
+			inviteActionError = (err instanceof Error ? err.message : null) ?? 'Approve failed';
 		}
 	}
 
@@ -310,13 +345,21 @@
 
 	async function confirmDeny(req: JoinRequest) {
 		inviteActionError = '';
-		const result = await denyJoinRequest($githubState.token, req, denyReason || undefined);
-		if (result.success) {
-			denyingIssue = null;
-			denyReason = '';
-			await pollInvites();
-		} else {
-			inviteActionError = result.error ?? 'Deny failed';
+		try {
+			const result = await denyJoinRequest($githubState.token, req, denyReason || undefined);
+			if (result.success) {
+				denyingIssue = null;
+				denyReason = '';
+				await pollInvites();
+			} else {
+				inviteActionError = result.error ?? 'Deny failed';
+			}
+		} catch (err) {
+			if (err instanceof AuthExpiredError) {
+				goto(`${base}/login?error=expired`);
+				return;
+			}
+			inviteActionError = (err instanceof Error ? err.message : null) ?? 'Deny failed';
 		}
 	}
 </script>
@@ -353,6 +396,9 @@
 							<div class="invite-meta">
 								<strong class="invite-user">{req.username}</strong>
 								<span class="invite-repo">wants to join {req.repoOwner}/{req.repoName}</span>
+								{#if req.submittedAt}
+									<span class="invite-sub">submitted {formatRelativeTime(req.submittedAt)}</span>
+								{/if}
 							</div>
 						</div>
 						{#if denyingIssue === req.issueNumber}
@@ -400,6 +446,11 @@
 						Cancel
 					</button>
 				</div>
+				{#if requestAccessBlockedUrl}
+					<p class="section-desc">
+						Your browser blocked the popup. <a href={requestAccessBlockedUrl} target="_blank" rel="noopener noreferrer">Click here to open the request page manually</a>.
+					</p>
+				{/if}
 			</section>
 		{/if}
 
@@ -823,6 +874,10 @@
 	.invite-repo {
 		font-size: 0.8rem;
 		opacity: 0.65;
+	}
+	.invite-sub {
+		font-size: 0.75rem;
+		opacity: 0.45;
 	}
 	.deny-reason {
 		width: 100%;

@@ -174,11 +174,10 @@ export async function syncFork(
  *   collaborator (GitHub returns 422 in this case — treated as success so
  *   orchestration code doesn't have to special-case it)
  * - { success: false, error } on permission denied (403), user not found
- *   (404), auth token expired (401), or any other failure
+ *   (404), or any other non-401 failure
  *
- * Note: 401 errors are caught and returned as { success: false } rather than
- * thrown, allowing the function to handle token expiration gracefully without
- * disrupting the caller's control flow.
+ * Note: 401 errors are re-thrown as AuthExpiredError, consistent with other
+ * wrappers in this file, so callers can redirect to the login page.
  */
 export async function addCollaborator(
 	token: string,
@@ -213,9 +212,7 @@ export async function addCollaborator(
 			}
 		});
 	} catch (err) {
-		if (err instanceof AuthExpiredError) {
-			return { success: false, error: 'GitHub session expired' };
-		}
+		if (err instanceof AuthExpiredError) throw err;
 		return { success: false, error: 'Add collaborator failed' };
 	}
 }
