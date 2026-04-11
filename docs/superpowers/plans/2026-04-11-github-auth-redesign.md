@@ -2322,11 +2322,12 @@ git commit -m "feat(auth): wire oauth button, add expired banner, link to PAT wi
 
 ---
 
-## Task 14: Update `connect/+page.svelte` and `settings/+page.svelte` for new token source
+## Task 14: Update `connect/+page.svelte`, `settings/+page.svelte`, and `+page.svelte` for new token source
 
 **Files:**
 - Modify: `src/routes/connect/+page.svelte`
 - Modify: `src/routes/settings/+page.svelte`
+- Modify: `src/routes/+page.svelte` *(added during execution — the root index page also reads `prefs.githubToken` in `onMount` and `continueFromGitHub()`; see "Index page patch" sub-steps below)*
 
 - [ ] **Step 1: Check settings page for token references**
 
@@ -2406,6 +2407,92 @@ Make these specific edits:
 - [ ] **Step 3: Patch `settings/+page.svelte` if needed**
 
 For any reference like `prefs.githubToken`, replace with `$githubState.token`, and add the import `import { githubState } from '$lib/stores/github';` at the top if it's not already there. For any `prefs.githubUsername`, replace with `$githubState.username`.
+
+- [ ] **Step 3b: Patch `src/routes/+page.svelte` (the root index page)**
+
+This file was missed from the original plan inventory but also reads `prefs.githubToken` / `prefs.githubUsername` in `onMount` and `continueFromGitHub()`. Apply the same principle: read auth from `$githubState`, use `clearAuth()` for the "token invalid" path.
+
+Specific edits:
+
+1. Add `clearAuth` to the existing `githubState` import:
+   ```typescript
+   import { githubState } from '$lib/stores/github';
+   ```
+   becomes
+   ```typescript
+   import { githubState, clearAuth } from '$lib/stores/github';
+   ```
+
+2. **Rewrite the `onMount` auth-check block.** Replace the whole block that starts with `const prefs = loadPlayerPrefs();` and handles the `if (prefs.githubToken)` branch (currently around lines 37-62) with:
+   ```typescript
+   const prefs = loadPlayerPrefs();
+   const token = $githubState.token;
+   if (token) {
+       const result = await validateToken(token);
+       if (result.valid) {
+           if (prefs.repoOwner && prefs.repoName) {
+               authMode = 'github-ready';
+               // Background check for upstream updates
+               checkForkStatus(token, prefs.repoOwner, prefs.repoName).then(status => {
+                   if (status?.behind) updateAvailable = true;
+               });
+           } else {
+               goto(`${base}/connect`);
+               return;
+           }
+       } else {
+           // Token invalid — clear it and redirect to login
+           clearAuth();
+           goto(`${base}/login`);
+           return;
+       }
+   } else {
+       // Not logged in — redirect to login
+       goto(`${base}/login`);
+       return;
+   }
+   ```
+
+3. **Rewrite `continueFromGitHub`.** Replace its body (currently around lines 67-103) with:
+   ```typescript
+   async function continueFromGitHub() {
+       const prefs = loadPlayerPrefs();
+       const token = $githubState.token;
+       if (!token || !prefs.repoOwner || !prefs.repoName) {
+           goto(`${base}/connect`);
+           return;
+       }
+       // Always fetch fresh from repo (cache may be stale after upstream sync)
+       let files: Map<string, string>;
+       try {
+           files = await fetchRepoFiles(token, prefs.repoOwner, prefs.repoName);
+           cacheFiles(files);
+       } catch {
+           // Offline fallback — use cache
+           const cached = loadCachedFiles();
+           if (!cached) {
+               goto(`${base}/connect`);
+               return;
+           }
+           files = cached;
+       }
+       const blocks = buildWorldBlocksFromFiles(files);
+       const state = buildWorldStateFromFiles(files, blocks.config);
+       worldBlocks.set(blocks);
+       worldState.set(state);
+       saveWorldBlocks(blocks);
+       saveWorldState(state);
+       githubState.update(s => ({
+           ...s,
+           isAuthenticated: true,
+           repoOwner: prefs.repoOwner!,
+           repoName: prefs.repoName!,
+           isConnected: true
+       }));
+       goto(`${base}/journal/setup`);
+   }
+   ```
+   (Note: `username` and `token` are removed from the `githubState.update` call because they should already be in the store — we're reading from them above, not writing.)
 
 - [ ] **Step 4: Typecheck**
 
