@@ -1,9 +1,12 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
+
+export type AuthMethod = 'oauth' | 'pat' | null;
 
 export interface GitHubState {
 	isAuthenticated: boolean;
 	username: string;
 	token: string;
+	authMethod: AuthMethod;
 	repoOwner: string;
 	repoName: string;
 	isConnected: boolean;
@@ -23,6 +26,7 @@ const DEFAULT_STATE: GitHubState = {
 	isAuthenticated: false,
 	username: '',
 	token: '',
+	authMethod: null,
 	repoOwner: '',
 	repoName: '',
 	isConnected: false,
@@ -40,13 +44,38 @@ const GH_STATE_KEY = 'journal-rpg-github-state';
 
 export function saveGitHubState(state: GitHubState): void {
 	if (typeof localStorage === 'undefined') return;
-	const { token, ...rest } = state;
-	localStorage.setItem(GH_STATE_KEY, JSON.stringify(rest));
+	// Persist the full state including the token. Previous versions stripped
+	// the token for "safety" but the real token still lived in playerPrefs —
+	// the split was pure footgun.
+	localStorage.setItem(GH_STATE_KEY, JSON.stringify(state));
 }
 
 export function loadGitHubState(): Partial<GitHubState> {
 	if (typeof localStorage === 'undefined') return {};
 	const raw = localStorage.getItem(GH_STATE_KEY);
 	if (!raw) return {};
-	return JSON.parse(raw);
+	try {
+		return JSON.parse(raw) as Partial<GitHubState>;
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Wipe all auth fields from both the in-memory store and localStorage.
+ * Called on logout and on 401 during a runtime API call.
+ */
+export function clearAuth(): void {
+	githubState.update((s) => ({
+		...s,
+		isAuthenticated: false,
+		username: '',
+		token: '',
+		authMethod: null,
+		isConnected: false
+	}));
+	if (typeof localStorage !== 'undefined') {
+		const current = get(githubState);
+		localStorage.setItem(GH_STATE_KEY, JSON.stringify(current));
+	}
 }
