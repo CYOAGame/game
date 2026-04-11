@@ -163,3 +163,59 @@ export async function syncFork(
 		return { success: false, error: 'Sync failed' };
 	}
 }
+
+/**
+ * Add a user as a collaborator on a repo with push permission.
+ * Requires the authenticated user to have admin or maintain permission.
+ *
+ * Returns:
+ * - { success: true } on successful add
+ * - { success: true, alreadyCollaborator: true } if the user is already a
+ *   collaborator (GitHub returns 422 in this case — treated as success so
+ *   orchestration code doesn't have to special-case it)
+ * - { success: false, error } on permission denied (403), user not found
+ *   (404), auth token expired (401), or any other failure
+ *
+ * Note: 401 errors are caught and returned as { success: false } rather than
+ * thrown, allowing the function to handle token expiration gracefully without
+ * disrupting the caller's control flow.
+ */
+export async function addCollaborator(
+	token: string,
+	owner: string,
+	repo: string,
+	username: string
+): Promise<{ success: boolean; error?: string; alreadyCollaborator?: boolean }> {
+	try {
+		return await handleRequest(async () => {
+			const octokit = getOctokit(token);
+			try {
+				await octokit.rest.repos.addCollaborator({
+					owner,
+					repo,
+					username,
+					permission: 'push'
+				});
+				return { success: true };
+			} catch (err: any) {
+				// 422 = user is already a collaborator (or invitation pending)
+				if (err.status === 422) {
+					return { success: true, alreadyCollaborator: true };
+				}
+				// 403 = forbidden (caller lacks admin)
+				// 404 = user not found
+				// 401 = auth token expired (will be caught by outer catch)
+				// Anything else: surface to caller
+				return {
+					success: false,
+					error: err.message ?? `GitHub returned ${err.status ?? 'unknown'}`
+				};
+			}
+		});
+	} catch (err) {
+		if (err instanceof AuthExpiredError) {
+			return { success: false, error: 'GitHub session expired' };
+		}
+		return { success: false, error: 'Add collaborator failed' };
+	}
+}
