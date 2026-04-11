@@ -11,6 +11,7 @@
 	import { githubState } from '$lib/stores/github';
 	import { serializeWorldStateToFiles, saveWithPR, queuePendingChanges } from '$lib/git/repo-writer';
 	import { formatJournalEntry, journalFilePath } from '$lib/git/journal-formatter';
+	import { AuthExpiredError } from '$lib/git/auth-errors';
 
 	// Derived from stores
 	let session = $derived($playSession);
@@ -190,6 +191,11 @@
 					githubState.update(s => ({ ...s, syncStatus: 'pending', syncError: result.error }));
 				}
 			} catch (err: any) {
+				if (err instanceof AuthExpiredError) {
+					// clearAuth() was already called inside handleRequest — just bounce.
+					goto(`${base}/login?error=expired`);
+					return updated;
+				}
 				githubState.update(s => ({ ...s, syncStatus: 'error', syncError: err.message }));
 			}
 		}
