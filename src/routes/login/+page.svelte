@@ -54,10 +54,14 @@
 		sessionStorage.setItem('oauth-state', state);
 		const redirectUri = encodeURIComponent(`${WORKER_URL}/callback`);
 		const encodedState = encodeURIComponent(state);
+		// Scope is public_repo (not repo): the OAuth path is the "fast public-world"
+		// entrypoint, which gives a dramatically friendlier consent screen ("access
+		// your public repositories only"). Private-world players use the PAT wizard
+		// instead, which supports private repos via fine-grained Contents: R/W.
 		const authorizeUrl =
 			`https://github.com/login/oauth/authorize` +
 			`?client_id=${encodeURIComponent(CLIENT_ID)}` +
-			`&scope=repo` +
+			`&scope=public_repo` +
 			`&redirect_uri=${redirectUri}` +
 			`&state=${encodedState}`;
 		window.location.href = authorizeUrl;
