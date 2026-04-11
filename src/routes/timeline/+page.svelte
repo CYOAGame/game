@@ -4,6 +4,7 @@
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { loadWorldState, loadWorldBlocks } from '$lib/engine/world-loader';
 	import { playerPrefs, loadPlayerPrefs } from '$lib/stores/player';
+	import InvitesBadge from '$lib/components/InvitesBadge.svelte';
 
 	// ── Collapse state ──────────────────────────────────────────────────────────
 	let showOverview = $state(true);
@@ -115,6 +116,7 @@
 			<h1 class="inspector-title">World Inspector</h1>
 		</div>
 		<div class="header-actions">
+			<InvitesBadge />
 			<button class="action-btn" onclick={refresh}>Refresh</button>
 			{#if confirmClear}
 				<button class="action-btn danger" onclick={clearWorld}>Confirm Clear?</button>
@@ -549,6 +551,7 @@
 
 	.header-actions {
 		display: flex;
+		align-items: center;
 		gap: 0.5rem;
 	}
 

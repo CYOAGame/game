@@ -16,6 +16,7 @@
 	import type { CollapsedRole } from '$lib/types/session';
 	import type { Choice, ChoiceNode } from '$lib/types/blocks';
 	import { onMount } from 'svelte';
+	import InvitesBadge from '$lib/components/InvitesBadge.svelte';
 
 	// Local reactive state
 	let narrative = $state<Array<{ text: string; choiceLabel?: string }>>([]);
@@ -512,6 +513,7 @@
 			{/if}
 		</div>
 		<div class="header-right">
+			<InvitesBadge />
 			{#if session}
 				<div class="exhaustion-meter" title="Exhaustion: {session.exhaustion}/{session.maxExhaustion}">
 					<span class="exhaustion-label">Fatigue</span>
@@ -718,7 +720,13 @@
 
 	.header-right {
 		display: flex;
+		align-items: center;
 		justify-content: flex-end;
+		gap: 0.75rem;
+	}
+
+	.header-right :global(.invites-badge) {
+		margin-left: 0;
 	}
 
 	.header-center {
