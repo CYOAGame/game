@@ -429,13 +429,16 @@ Same as create-variant, except:
 Two features are explicitly out of scope for this spec but are worth
 noting so future-us remembers the reasoning:
 
-1. **Owner-approved private-world invites.** When a player wants to join a
-   private world, they request access from inside the game; the world owner
-   sees a notification in their own game session and approves with one tap,
-   which uses their OAuth token to add the player as a collaborator via
+1. **Owner-approved public-world invites.** *Scoped and in progress — see
+   [`2026-04-11-owner-approved-invites.md`](./2026-04-11-owner-approved-invites.md).*
+   When a player wants to join a public shared world (e.g.
+   `CYOAGame/Public_Game`), they open a pre-filled GitHub Issue on the repo;
+   the world owner sees it as a Pending Invite card in their own game session
+   and approves with one tap, which uses their token to call
    `POST /repos/{owner}/{repo}/collaborators/{username}`. Zero new
-   infrastructure — reuses auth from this spec. Addresses the most common
-   private-world use case (friend-group campaigns).
+   infrastructure — reuses auth from this spec. Note: this is scoped to
+   *public* worlds only; private-world auto-join still requires a GitHub App
+   and remains future work.
 
 2. **GitHub App foundation.** A per-repo-installable GitHub App (distinct
    from the OAuth App built here) would give narrower, short-lived installation
