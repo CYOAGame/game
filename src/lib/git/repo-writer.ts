@@ -1,6 +1,7 @@
 import yaml from 'js-yaml';
 import type { WorldState } from '../types/state';
-import { getOctokit } from './github-client';
+import { getOctokit, handleRequest } from './github-client';
+import { AuthExpiredError } from './auth-errors';
 
 const PENDING_KEY = 'journal-rpg-pending-commits';
 
@@ -63,59 +64,54 @@ export async function commitFiles(
 	message: string
 ): Promise<{ success: boolean; sha?: string; error?: string }> {
 	try {
-		const octokit = getOctokit(token);
+		return await handleRequest(async () => {
+			const octokit = getOctokit(token);
 
-		// 1. GET ref
-		const refInfo = await resolveRef(octokit, owner, repo);
-		if (!refInfo) return { success: false, error: 'Could not find main or master branch' };
+			const refInfo = await resolveRef(octokit, owner, repo);
+			if (!refInfo) return { success: false, error: 'Could not find main or master branch' };
 
-		// 2. GET commit to get tree sha
-		const { data: commitData } = await octokit.rest.git.getCommit({
-			owner, repo, commit_sha: refInfo.sha
+			const { data: commitData } = await octokit.rest.git.getCommit({
+				owner, repo, commit_sha: refInfo.sha
+			});
+			const baseTreeSha = commitData.tree.sha;
+
+			const treeEntries = await Promise.all(
+				[...files.entries()].map(async ([path, content]) => {
+					const { data: blob } = await octokit.rest.git.createBlob({
+						owner, repo, content, encoding: 'utf-8'
+					});
+					return {
+						path,
+						mode: '100644' as const,
+						type: 'blob' as const,
+						sha: blob.sha
+					};
+				})
+			);
+
+			const { data: newTree } = await octokit.rest.git.createTree({
+				owner, repo,
+				base_tree: baseTreeSha,
+				tree: treeEntries
+			});
+
+			const { data: newCommit } = await octokit.rest.git.createCommit({
+				owner, repo,
+				message,
+				tree: newTree.sha,
+				parents: [refInfo.sha]
+			});
+
+			await octokit.rest.git.updateRef({
+				owner, repo,
+				ref: refInfo.ref,
+				sha: newCommit.sha
+			});
+
+			return { success: true, sha: newCommit.sha };
 		});
-		const baseTreeSha = commitData.tree.sha;
-
-		// 3. Create blobs for each file
-		const treeEntries = await Promise.all(
-			[...files.entries()].map(async ([path, content]) => {
-				const { data: blob } = await octokit.rest.git.createBlob({
-					owner, repo,
-					content,
-					encoding: 'utf-8'
-				});
-				return {
-					path,
-					mode: '100644' as const,
-					type: 'blob' as const,
-					sha: blob.sha
-				};
-			})
-		);
-
-		// 4. Create tree
-		const { data: newTree } = await octokit.rest.git.createTree({
-			owner, repo,
-			base_tree: baseTreeSha,
-			tree: treeEntries
-		});
-
-		// 5. Create commit
-		const { data: newCommit } = await octokit.rest.git.createCommit({
-			owner, repo,
-			message,
-			tree: newTree.sha,
-			parents: [refInfo.sha]
-		});
-
-		// 6. Update ref
-		await octokit.rest.git.updateRef({
-			owner, repo,
-			ref: refInfo.ref,
-			sha: newCommit.sha
-		});
-
-		return { success: true, sha: newCommit.sha };
 	} catch (err) {
+		if (err instanceof AuthExpiredError) throw err;
 		const message = err instanceof Error ? err.message : 'Unknown error';
 		return { success: false, error: message };
 	}
@@ -135,26 +131,29 @@ export async function ensureBranch(
 	const branchName = `journal/${characterId}`;
 	const ref = `heads/${branchName}`;
 
-	// Check if branch already exists
 	try {
-		const { data } = await octokit.rest.git.getRef({ owner, repo, ref });
-		return { ref, sha: data.object.sha };
-	} catch {
-		// Branch doesn't exist — create from main
-	}
-
-	// Get main HEAD
-	const mainRef = await resolveRef(octokit, owner, repo);
-	if (!mainRef) return null;
-
-	try {
-		const { data } = await octokit.rest.git.createRef({
-			owner, repo,
-			ref: `refs/${ref}`,
-			sha: mainRef.sha
+		return await handleRequest(async () => {
+			try {
+				const { data } = await octokit.rest.git.getRef({ owner, repo, ref });
+				return { ref, sha: data.object.sha };
+			} catch {
+				// fall through to create
+			}
+			const mainRef = await resolveRef(octokit, owner, repo);
+			if (!mainRef) return null;
+			try {
+				const { data } = await octokit.rest.git.createRef({
+					owner, repo,
+					ref: `refs/${ref}`,
+					sha: mainRef.sha
+				});
+				return { ref, sha: data.object.sha };
+			} catch {
+				return null;
+			}
 		});
-		return { ref, sha: data.object.sha };
 	} catch (err) {
+		if (err instanceof AuthExpiredError) throw err;
 		return null;
 	}
 }
@@ -171,45 +170,42 @@ export async function commitToBranch(
 	message: string
 ): Promise<{ success: boolean; sha?: string; error?: string }> {
 	try {
-		const octokit = getOctokit(token);
+		return await handleRequest(async () => {
+			const octokit = getOctokit(token);
 
-		// Ensure branch exists
-		const branch = await ensureBranch(token, owner, repo, characterId);
-		if (!branch) return { success: false, error: 'Could not create or find branch' };
+			const branch = await ensureBranch(token, owner, repo, characterId);
+			if (!branch) return { success: false, error: 'Could not create or find branch' };
 
-		// Get current commit on branch
-		const { data: commitData } = await octokit.rest.git.getCommit({
-			owner, repo, commit_sha: branch.sha
+			const { data: commitData } = await octokit.rest.git.getCommit({
+				owner, repo, commit_sha: branch.sha
+			});
+			const baseTreeSha = commitData.tree.sha;
+
+			const treeEntries = await Promise.all(
+				[...files.entries()].map(async ([path, content]) => {
+					const { data: blob } = await octokit.rest.git.createBlob({
+						owner, repo, content, encoding: 'utf-8'
+					});
+					return { path, mode: '100644' as const, type: 'blob' as const, sha: blob.sha };
+				})
+			);
+
+			const { data: newTree } = await octokit.rest.git.createTree({
+				owner, repo, base_tree: baseTreeSha, tree: treeEntries
+			});
+
+			const { data: newCommit } = await octokit.rest.git.createCommit({
+				owner, repo, message, tree: newTree.sha, parents: [branch.sha]
+			});
+
+			await octokit.rest.git.updateRef({
+				owner, repo, ref: branch.ref, sha: newCommit.sha
+			});
+
+			return { success: true, sha: newCommit.sha };
 		});
-		const baseTreeSha = commitData.tree.sha;
-
-		// Create blobs
-		const treeEntries = await Promise.all(
-			[...files.entries()].map(async ([path, content]) => {
-				const { data: blob } = await octokit.rest.git.createBlob({
-					owner, repo, content, encoding: 'utf-8'
-				});
-				return { path, mode: '100644' as const, type: 'blob' as const, sha: blob.sha };
-			})
-		);
-
-		// Create tree
-		const { data: newTree } = await octokit.rest.git.createTree({
-			owner, repo, base_tree: baseTreeSha, tree: treeEntries
-		});
-
-		// Create commit on branch
-		const { data: newCommit } = await octokit.rest.git.createCommit({
-			owner, repo, message, tree: newTree.sha, parents: [branch.sha]
-		});
-
-		// Update branch ref
-		await octokit.rest.git.updateRef({
-			owner, repo, ref: branch.ref, sha: newCommit.sha
-		});
-
-		return { success: true, sha: newCommit.sha };
 	} catch (err) {
+		if (err instanceof AuthExpiredError) throw err;
 		const msg = err instanceof Error ? err.message : 'Unknown error';
 		return { success: false, error: msg };
 	}
@@ -226,45 +222,49 @@ export async function ensurePR(
 	characterId: string,
 	characterName: string
 ): Promise<{ prNumber: number } | null> {
-	const octokit = getOctokit(token);
-	const branchName = `journal/${characterId}`;
-
-	// Check for existing open PR
 	try {
-		const { data: prs } = await octokit.rest.pulls.list({
-			owner, repo, head: `${owner}:${branchName}`, state: 'open'
-		});
-		if (prs.length > 0) {
-			return { prNumber: prs[0].number };
-		}
-	} catch {
-		// continue to create
-	}
+		return await handleRequest(async () => {
+			const octokit = getOctokit(token);
+			const branchName = `journal/${characterId}`;
 
-	// Create PR
-	try {
-		const { data: pr } = await octokit.rest.pulls.create({
-			owner, repo,
-			title: `Journal: ${characterName}`,
-			body: `Ongoing journal entries for ${characterName}.\n\nThis PR is auto-managed by the Journal RPG game. Each commit represents one journal entry (one day).`,
-			head: branchName,
-			base: 'main'
+			try {
+				const { data: prs } = await octokit.rest.pulls.list({
+					owner, repo, head: `${owner}:${branchName}`, state: 'open'
+				});
+				if (prs.length > 0) {
+					return { prNumber: prs[0].number };
+				}
+			} catch {
+				// continue to create
+			}
+
+			try {
+				const { data: pr } = await octokit.rest.pulls.create({
+					owner, repo,
+					title: `Journal: ${characterName}`,
+					body: `Ongoing journal entries for ${characterName}.\n\nThis PR is auto-managed by the Journal RPG game. Each commit represents one journal entry (one day).`,
+					head: branchName,
+					base: 'main'
+				});
+				return { prNumber: pr.number };
+			} catch {
+				try {
+					const { data: pr } = await octokit.rest.pulls.create({
+						owner, repo,
+						title: `Journal: ${characterName}`,
+						body: `Ongoing journal entries for ${characterName}.\n\nThis PR is auto-managed by the Journal RPG game. Each commit represents one journal entry (one day).`,
+						head: branchName,
+						base: 'master'
+					});
+					return { prNumber: pr.number };
+				} catch {
+					return null;
+				}
+			}
 		});
-		return { prNumber: pr.number };
-	} catch (err: any) {
-		// If base is master not main, try that
-		try {
-			const { data: pr } = await octokit.rest.pulls.create({
-				owner, repo,
-				title: `Journal: ${characterName}`,
-				body: `Ongoing journal entries for ${characterName}.\n\nThis PR is auto-managed by the Journal RPG game. Each commit represents one journal entry (one day).`,
-				head: branchName,
-				base: 'master'
-			});
-			return { prNumber: pr.number };
-		} catch {
-			return null;
-		}
+	} catch (err) {
+		if (err instanceof AuthExpiredError) throw err;
+		return null;
 	}
 }
 
@@ -278,33 +278,35 @@ export async function syncBranchWithMain(
 	repo: string,
 	characterId: string
 ): Promise<{ success: boolean; error?: string }> {
-	const octokit = getOctokit(token);
-	const branchName = `journal/${characterId}`;
-
 	try {
-		await octokit.rest.repos.merge({
-			owner, repo,
-			base: branchName,
-			head: 'main',
-			commit_message: `Sync ${branchName} with main`
+		return await handleRequest(async () => {
+			const octokit = getOctokit(token);
+			const branchName = `journal/${characterId}`;
+			try {
+				await octokit.rest.repos.merge({
+					owner, repo, base: branchName, head: 'main',
+					commit_message: `Sync ${branchName} with main`
+				});
+				return { success: true };
+			} catch (err: any) {
+				if (err.status === 409) return { success: true };
+				try {
+					await octokit.rest.repos.merge({
+						owner, repo, base: branchName, head: 'master',
+						commit_message: `Sync ${branchName} with master`
+					});
+					return { success: true };
+				} catch (err2: any) {
+					if (err2.status === 409) return { success: true };
+					// 401 will escape this inner catch and be caught by handleRequest above
+					if (err2.status === 401 || err.status === 401) throw err2;
+					return { success: false, error: err2.message ?? 'Branch sync failed' };
+				}
+			}
 		});
-		return { success: true };
-	} catch (err: any) {
-		// 409 = already up to date, that's fine
-		if (err.status === 409) return { success: true };
-		// Try master
-		try {
-			await octokit.rest.repos.merge({
-				owner, repo,
-				base: branchName,
-				head: 'master',
-				commit_message: `Sync ${branchName} with master`
-			});
-			return { success: true };
-		} catch (err2: any) {
-			if (err2.status === 409) return { success: true };
-			return { success: false, error: err2.message ?? 'Branch sync failed' };
-		}
+	} catch (err) {
+		if (err instanceof AuthExpiredError) throw err;
+		return { success: false, error: 'Branch sync failed' };
 	}
 }
 
@@ -317,33 +319,33 @@ export async function mergeBranchToMain(
 	repo: string,
 	characterId: string
 ): Promise<{ success: boolean; error?: string }> {
-	const octokit = getOctokit(token);
-	const branchName = `journal/${characterId}`;
-
 	try {
-		// Try merge via the merge API (simpler than PR merge)
-		await octokit.rest.repos.merge({
-			owner, repo,
-			base: 'main',
-			head: branchName,
-			commit_message: `Merge journal/${characterId}`
+		return await handleRequest(async () => {
+			const octokit = getOctokit(token);
+			const branchName = `journal/${characterId}`;
+			try {
+				await octokit.rest.repos.merge({
+					owner, repo, base: 'main', head: branchName,
+					commit_message: `Merge journal/${characterId}`
+				});
+				return { success: true };
+			} catch (err: any) {
+				try {
+					await octokit.rest.repos.merge({
+						owner, repo, base: 'master', head: branchName,
+						commit_message: `Merge journal/${characterId}`
+					});
+					return { success: true };
+				} catch (err2: any) {
+					if (err2.status === 409 || err.status === 409) return { success: true };
+					if (err2.status === 401 || err.status === 401) throw err2;
+					return { success: false, error: err2.message ?? err.message ?? 'Merge failed' };
+				}
+			}
 		});
-		return { success: true };
-	} catch (err: any) {
-		// Try master
-		try {
-			await octokit.rest.repos.merge({
-				owner, repo,
-				base: 'master',
-				head: branchName,
-				commit_message: `Merge journal/${characterId}`
-			});
-			return { success: true };
-		} catch (err2: any) {
-			// 409 = nothing to merge (already up to date) — that's fine
-			if (err2.status === 409 || err.status === 409) return { success: true };
-			return { success: false, error: err2.message ?? err.message ?? 'Merge failed' };
-		}
+	} catch (err) {
+		if (err instanceof AuthExpiredError) throw err;
+		return { success: false, error: 'Merge failed' };
 	}
 }
 
