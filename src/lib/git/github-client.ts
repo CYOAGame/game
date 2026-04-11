@@ -1,4 +1,27 @@
 import { Octokit } from 'octokit';
+import { AuthExpiredError } from './auth-errors';
+import { clearAuth } from '../stores/github';
+
+/**
+ * Wrap a runtime Octokit call so that 401s are promoted to AuthExpiredError
+ * and the in-memory + persisted session is cleared. Non-401 errors pass
+ * through unchanged. Use this for calls made AFTER a valid session exists,
+ * NOT for login-time validators like validateToken / validateRepo.
+ */
+export async function handleRequest<T>(fn: () => Promise<T>): Promise<T> {
+	try {
+		return await fn();
+	} catch (err) {
+		const status =
+			(err as { status?: number })?.status ??
+			(err as { response?: { status?: number } })?.response?.status;
+		if (status === 401) {
+			clearAuth();
+			throw new AuthExpiredError();
+		}
+		throw err;
+	}
+}
 
 let octokitInstance: Octokit | null = null;
 
