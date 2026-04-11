@@ -71,20 +71,26 @@ export async function validateRepo(token: string, owner: string, repo: string): 
 
 export async function forkRepo(token: string, templateOwner: string, templateRepo: string): Promise<{ owner: string; repo: string } | null> {
 	try {
-		const octokit = getOctokit(token);
-		const { data } = await octokit.rest.repos.createFork({ owner: templateOwner, repo: templateRepo });
-		return { owner: data.owner.login, repo: data.name };
-	} catch {
+		return await handleRequest(async () => {
+			const octokit = getOctokit(token);
+			const { data } = await octokit.rest.repos.createFork({ owner: templateOwner, repo: templateRepo });
+			return { owner: data.owner.login, repo: data.name };
+		});
+	} catch (err) {
+		if (err instanceof AuthExpiredError) throw err;
 		return null;
 	}
 }
 
 export async function listUserRepos(token: string): Promise<Array<{ owner: string; repo: string; description: string }>> {
 	try {
-		const octokit = getOctokit(token);
-		const { data } = await octokit.rest.repos.listForAuthenticatedUser({ sort: 'updated', per_page: 20 });
-		return data.map(r => ({ owner: r.owner.login, repo: r.name, description: r.description ?? '' }));
-	} catch {
+		return await handleRequest(async () => {
+			const octokit = getOctokit(token);
+			const { data } = await octokit.rest.repos.listForAuthenticatedUser({ sort: 'updated', per_page: 20 });
+			return data.map(r => ({ owner: r.owner.login, repo: r.name, description: r.description ?? '' }));
+		});
+	} catch (err) {
+		if (err instanceof AuthExpiredError) throw err;
 		return [];
 	}
 }
@@ -99,37 +105,32 @@ export async function checkForkStatus(
 	repo: string
 ): Promise<{ isFork: boolean; behind: boolean; behindBy: number; parentOwner: string; parentRepo: string } | null> {
 	try {
-		const octokit = getOctokit(token);
-		const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
-
-		if (!repoData.parent) {
-			return null; // Not a fork
-		}
-
-		const parentOwner = repoData.parent.owner.login;
-		const parentRepo = repoData.parent.name;
-
-		// Compare the fork to its parent
-		try {
-			const { data: comparison } = await octokit.rest.repos.compareCommits({
-				owner: parentOwner,
-				repo: parentRepo,
-				base: `${owner}:main`,
-				head: `${parentOwner}:main`
-			});
-
-			return {
-				isFork: true,
-				behind: comparison.ahead_by > 0,
-				behindBy: comparison.ahead_by,
-				parentOwner,
-				parentRepo
-			};
-		} catch {
-			// If comparison fails (e.g., diverged histories), assume behind
-			return { isFork: true, behind: true, behindBy: 0, parentOwner, parentRepo };
-		}
-	} catch {
+		return await handleRequest(async () => {
+			const octokit = getOctokit(token);
+			const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
+			if (!repoData.parent) return null;
+			const parentOwner = repoData.parent.owner.login;
+			const parentRepo = repoData.parent.name;
+			try {
+				const { data: comparison } = await octokit.rest.repos.compareCommits({
+					owner: parentOwner,
+					repo: parentRepo,
+					base: `${owner}:main`,
+					head: `${parentOwner}:main`
+				});
+				return {
+					isFork: true,
+					behind: comparison.ahead_by > 0,
+					behindBy: comparison.ahead_by,
+					parentOwner,
+					parentRepo
+				};
+			} catch {
+				return { isFork: true, behind: true, behindBy: 0, parentOwner, parentRepo };
+			}
+		});
+	} catch (err) {
+		if (err instanceof AuthExpiredError) throw err;
 		return null;
 	}
 }
@@ -142,25 +143,23 @@ export async function syncFork(
 	owner: string,
 	repo: string
 ): Promise<{ success: boolean; error?: string }> {
-	const octokit = getOctokit(token);
 	try {
-		await octokit.rest.repos.mergeUpstream({
-			owner,
-			repo,
-			branch: 'main'
+		return await handleRequest(async () => {
+			const octokit = getOctokit(token);
+			try {
+				await octokit.rest.repos.mergeUpstream({ owner, repo, branch: 'main' });
+				return { success: true };
+			} catch (err: any) {
+				try {
+					await octokit.rest.repos.mergeUpstream({ owner, repo, branch: 'master' });
+					return { success: true };
+				} catch (err2: any) {
+					return { success: false, error: err2.message ?? err.message ?? 'Sync failed' };
+				}
+			}
 		});
-		return { success: true };
-	} catch (err: any) {
-		// Try master
-		try {
-			await octokit.rest.repos.mergeUpstream({
-				owner,
-				repo,
-				branch: 'master'
-			});
-			return { success: true };
-		} catch (err2: any) {
-			return { success: false, error: err2.message ?? err.message ?? 'Sync failed' };
-		}
+	} catch (err) {
+		if (err instanceof AuthExpiredError) throw err;
+		return { success: false, error: 'Sync failed' };
 	}
 }

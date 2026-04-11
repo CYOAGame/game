@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parseRepoUrl, handleRequest } from '../../src/lib/git/github-client';
+import { parseRepoUrl, handleRequest, validateToken, validateRepo } from '../../src/lib/git/github-client';
 import { AuthExpiredError } from '../../src/lib/git/auth-errors';
 import { githubState } from '../../src/lib/stores/github';
 import { get } from 'svelte/store';
@@ -87,5 +87,38 @@ describe('handleRequest', () => {
 		await expect(
 			handleRequest(async () => { throw fakeErr; })
 		).rejects.toBeInstanceOf(AuthExpiredError);
+	});
+});
+
+describe('validators do not clear auth on 401', () => {
+	beforeEach(() => {
+		(globalThis as any).localStorage = new MemoryStorage();
+		githubState.set({
+			isAuthenticated: true,
+			username: 'alice',
+			token: 'ghp_existing',
+			authMethod: 'oauth',
+			repoOwner: 'alice',
+			repoName: 'world',
+			isConnected: true,
+			syncStatus: 'synced',
+			pendingChanges: []
+		});
+	});
+
+	// These call real Octokit with a bogus token. The functions should catch
+	// any error internally and return {valid:false, …} without touching
+	// githubState.
+	it('validateToken with a bogus token returns {valid:false} and leaves the session alone', async () => {
+		const result = await validateToken('ghp_definitely_not_real_xxxx');
+		expect(result.valid).toBe(false);
+		expect(get(githubState).token).toBe('ghp_existing');
+		expect(get(githubState).authMethod).toBe('oauth');
+	});
+
+	it('validateRepo with a bogus token returns {valid:false} and leaves the session alone', async () => {
+		const result = await validateRepo('ghp_definitely_not_real_xxxx', 'nobody', 'nothing');
+		expect(result.valid).toBe(false);
+		expect(get(githubState).token).toBe('ghp_existing');
 	});
 });
