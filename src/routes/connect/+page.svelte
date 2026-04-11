@@ -8,6 +8,12 @@
 	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles } from '$lib/git/yaml-loader';
 	import { saveWorldState, saveWorldBlocks } from '$lib/engine/world-loader';
 	import { AuthExpiredError } from '$lib/git/auth-errors';
+	import {
+		listJoinRequests,
+		approveJoinRequest,
+		denyJoinRequest,
+		type JoinRequest
+	} from '$lib/invites/invite-client';
 	import { onMount } from 'svelte';
 
 	let ghState = $derived($githubState);
@@ -28,6 +34,14 @@
 	let loadingRecent = $state(false);
 	let recentError = $state('');
 
+	// Pending invites state
+	let pendingInvites = $state<JoinRequest[]>([]);
+	let invitesLoading = $state(false);
+	let inviteError = $state('');
+	let denyingIssue = $state<number | null>(null);
+	let denyReason = $state('');
+	let inviteActionError = $state<string>('');
+
 	// Fork sync state
 	let showSyncPrompt = $state(false);
 	let syncInfo = $state<{ behindBy: number; parentOwner: string; parentRepo: string } | null>(null);
@@ -44,6 +58,7 @@
 			recentOwner = prefs.repoOwner;
 			recentRepo = prefs.repoName;
 		}
+		pollInvites();
 	});
 
 	async function connectToRepo(owner: string, repo: string) {
@@ -213,6 +228,61 @@
 		clearAuth();
 		goto(`${base}/login`);
 	}
+
+	async function pollInvites() {
+		const gh = $githubState;
+		if (!gh.token || !gh.repoOwner || !gh.repoName) {
+			pendingInvites = [];
+			return;
+		}
+		invitesLoading = true;
+		inviteError = '';
+		try {
+			pendingInvites = await listJoinRequests(gh.token, gh.repoOwner, gh.repoName);
+		} catch (err) {
+			if (err instanceof AuthExpiredError) {
+				goto(`${base}/login?error=expired`);
+				return;
+			}
+			inviteError = 'Could not fetch pending invites.';
+			pendingInvites = [];
+		} finally {
+			invitesLoading = false;
+		}
+	}
+
+	async function handleApprove(req: JoinRequest) {
+		inviteActionError = '';
+		const result = await approveJoinRequest($githubState.token, req);
+		if (result.success) {
+			await pollInvites();
+		} else {
+			inviteActionError = result.error ?? 'Approve failed';
+		}
+	}
+
+	function startDeny(issueNumber: number) {
+		denyingIssue = issueNumber;
+		denyReason = '';
+		inviteActionError = '';
+	}
+
+	function cancelDeny() {
+		denyingIssue = null;
+		denyReason = '';
+	}
+
+	async function confirmDeny(req: JoinRequest) {
+		inviteActionError = '';
+		const result = await denyJoinRequest($githubState.token, req, denyReason || undefined);
+		if (result.success) {
+			denyingIssue = null;
+			denyReason = '';
+			await pollInvites();
+		} else {
+			inviteActionError = result.error ?? 'Deny failed';
+		}
+	}
 </script>
 
 <div class="connect-page">
@@ -227,6 +297,51 @@
 				</div>
 			{/if}
 		</header>
+
+		<!-- Pending Invites -->
+		{#if pendingInvites.length > 0 || invitesLoading}
+			<section class="section">
+				<h2 class="section-title">Pending Invites</h2>
+				{#if invitesLoading && pendingInvites.length === 0}
+					<p class="section-desc">Checking...</p>
+				{/if}
+				{#if inviteError}
+					<p class="error-msg">{inviteError}</p>
+				{/if}
+				{#each pendingInvites as req (req.issueNumber)}
+					<div class="invite-card">
+						<div class="invite-header">
+							{#if req.avatarUrl}
+								<img class="invite-avatar" src={req.avatarUrl} alt="" />
+							{/if}
+							<div class="invite-meta">
+								<strong class="invite-user">{req.username}</strong>
+								<span class="invite-repo">wants to join {req.repoOwner}/{req.repoName}</span>
+							</div>
+						</div>
+						{#if denyingIssue === req.issueNumber}
+							<textarea
+								class="deny-reason"
+								placeholder="Optional reason (shown to the requester)"
+								bind:value={denyReason}
+							></textarea>
+							<div class="invite-actions">
+								<button class="btn btn-secondary" onclick={cancelDeny}>Cancel</button>
+								<button class="btn btn-primary" onclick={() => confirmDeny(req)}>Confirm Deny</button>
+							</div>
+						{:else}
+							<div class="invite-actions">
+								<button class="btn btn-primary" onclick={() => handleApprove(req)}>Approve</button>
+								<button class="btn btn-secondary" onclick={() => startDeny(req.issueNumber)}>Deny</button>
+							</div>
+						{/if}
+					</div>
+				{/each}
+				{#if inviteActionError}
+					<p class="error-msg">{inviteActionError}</p>
+				{/if}
+			</section>
+		{/if}
 
 		<!-- Recent World -->
 		{#if recentOwner && recentRepo}
@@ -616,5 +731,62 @@
 		border-radius: 4px;
 		padding: 0.5rem 0.75rem;
 		margin: 0;
+	}
+
+	.invite-card {
+		background: rgba(255, 255, 255, 0.04);
+		border: 1px solid var(--session-end-border);
+		border-radius: 4px;
+		padding: 0.85rem 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+	.invite-header {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+	}
+	.invite-avatar {
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+	}
+	.invite-meta {
+		display: flex;
+		flex-direction: column;
+	}
+	.invite-user {
+		font-size: 0.95rem;
+		color: var(--journal-accent);
+	}
+	.invite-repo {
+		font-size: 0.8rem;
+		opacity: 0.65;
+	}
+	.deny-reason {
+		width: 100%;
+		box-sizing: border-box;
+		min-height: 60px;
+		padding: 0.5rem 0.7rem;
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid var(--session-end-border);
+		border-radius: 4px;
+		color: var(--session-end-text);
+		font-family: var(--journal-font);
+		font-size: 0.85rem;
+		resize: vertical;
+	}
+	.deny-reason:focus {
+		outline: none;
+		border-color: var(--journal-accent);
+	}
+	.invite-actions {
+		display: flex;
+		gap: 0.5rem;
+	}
+	.invite-actions .btn {
+		padding: 0.4rem 0.9rem;
+		font-size: 0.85rem;
 	}
 </style>
