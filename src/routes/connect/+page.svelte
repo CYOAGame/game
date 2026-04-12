@@ -4,7 +4,7 @@
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { githubState, saveGitHubState, clearAuth } from '$lib/stores/github';
 	import { playerPrefs, savePlayerPrefs, loadPlayerPrefs } from '$lib/stores/player';
-	import { parseRepoUrl, validateRepo, forkRepo, checkForkStatus, syncFork } from '$lib/git/github-client';
+	import { parseRepoUrl, validateRepo, forkRepo, checkForkStatus, syncFork, addCollaborator } from '$lib/git/github-client';
 	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles } from '$lib/git/yaml-loader';
 	import { saveWorldState, saveWorldBlocks } from '$lib/engine/world-loader';
 	import { AuthExpiredError } from '$lib/git/auth-errors';
@@ -48,6 +48,11 @@
 	let denyingIssue = $state<number | null>(null);
 	let denyReason = $state('');
 	let inviteActionError = $state<string>('');
+
+	// Direct invite state
+	let inviteUsername = $state('');
+	let inviteSending = $state(false);
+	let inviteResult = $state<string>('');
 
 	// Fork sync state
 	let showSyncPrompt = $state(false);
@@ -362,6 +367,32 @@
 			inviteActionError = (err instanceof Error ? err.message : null) ?? 'Deny failed';
 		}
 	}
+
+	async function handleDirectInvite() {
+		const name = inviteUsername.trim();
+		if (!name) return;
+		inviteSending = true;
+		inviteResult = '';
+		try {
+			const result = await addCollaborator($githubState.token, $githubState.repoOwner, $githubState.repoName, name);
+			if (result.success) {
+				inviteResult = result.alreadyCollaborator
+					? `${name} is already a collaborator.`
+					: `Invite sent to ${name}! They'll get an email from GitHub.`;
+				inviteUsername = '';
+			} else {
+				inviteResult = result.error ?? 'Invite failed.';
+			}
+		} catch (err) {
+			if (err instanceof AuthExpiredError) {
+				goto(`${base}/login?error=expired`);
+				return;
+			}
+			inviteResult = 'Invite failed.';
+		} finally {
+			inviteSending = false;
+		}
+	}
 </script>
 
 <div class="connect-page">
@@ -421,6 +452,33 @@
 				{/each}
 				{#if inviteActionError}
 					<p class="error-msg">{inviteActionError}</p>
+				{/if}
+			</section>
+		{/if}
+
+		<!-- Direct Invite -->
+		{#if $githubState.repoOwner && $githubState.repoName}
+			<section class="section">
+				<h2 class="section-title">Invite a Player</h2>
+				<div class="invite-form">
+					<input
+						class="field-input"
+						type="text"
+						placeholder="GitHub username"
+						bind:value={inviteUsername}
+						disabled={inviteSending}
+						onkeydown={(e) => { if (e.key === 'Enter') handleDirectInvite(); }}
+					/>
+					<button
+						class="btn btn-primary"
+						onclick={handleDirectInvite}
+						disabled={inviteSending || !inviteUsername.trim()}
+					>
+						{inviteSending ? 'Sending...' : 'Send Invite'}
+					</button>
+				</div>
+				{#if inviteResult}
+					<p class="invite-result">{inviteResult}</p>
 				{/if}
 			</section>
 		{/if}
@@ -903,5 +961,22 @@
 	.invite-actions .btn {
 		padding: 0.4rem 0.9rem;
 		font-size: 0.85rem;
+	}
+	.invite-form {
+		display: flex;
+		gap: 0.5rem;
+	}
+	.invite-form .field-input {
+		flex: 1;
+	}
+	.invite-form .btn {
+		flex-shrink: 0;
+		width: auto;
+	}
+	.invite-result {
+		font-size: 0.85rem;
+		opacity: 0.7;
+		margin: 0;
+		line-height: 1.5;
 	}
 </style>
