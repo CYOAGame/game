@@ -48,9 +48,11 @@
 			return;
 		}
 
-		const repoResult = await validateRepo(decodedToken, tokenResult.username, decodedRepo);
+		// Use the owner from the invite code if present, fall back to token username
+		const repoOwner = decoded.owner || tokenResult.username;
+		const repoResult = await validateRepo(decodedToken, repoOwner, decodedRepo);
 		if (repoResult.valid) {
-			discoveredOwner = tokenResult.username;
+			discoveredOwner = repoOwner;
 		} else {
 			status = 'error';
 			errorMessage = `Couldn't find the world repo "${decodedRepo}". It may have been renamed or deleted.`;
