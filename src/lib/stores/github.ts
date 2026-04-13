@@ -1,10 +1,11 @@
 import { writable, derived, get } from 'svelte/store';
 
-export type AuthMethod = 'oauth' | 'pat' | null;
+export type AuthMethod = 'oauth' | 'pat' | 'invite-code' | null;
 
 export interface GitHubState {
 	isAuthenticated: boolean;
 	username: string;
+	displayName?: string;
 	token: string;
 	authMethod: AuthMethod;
 	repoOwner: string;
