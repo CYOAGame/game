@@ -77,6 +77,18 @@ export function createWorldSnapshotAt(
 	};
 }
 
+export function canGoToPast(
+	character: Character,
+	currentDate: GameDate,
+	seasons: string[],
+	timeline: WorldState['timeline']
+): boolean {
+	const hasDateRange = compareDates(character.birthDate, currentDate, seasons) < 0;
+	if (!hasDateRange) return false;
+	const hasEntries = timeline.some(e => e.characterId === character.id);
+	return hasEntries;
+}
+
 export function generatePastDate(
 	character: Character,
 	currentDate: GameDate,

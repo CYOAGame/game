@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { dateToDays, daysToDate, compareDates } from '../../src/lib/types/state';
-import { createWorldSnapshotAt, generatePastDate, generateFutureDate, suggestCharacters } from '../../src/lib/engine/timeline';
+import { createWorldSnapshotAt, generatePastDate, generateFutureDate, suggestCharacters, canGoToPast } from '../../src/lib/engine/timeline';
 import { createTestWorldState } from '../fixtures/world-state';
 import { allQuestlines } from '../fixtures/questlines';
 import type { GameDate } from '../../src/lib/types/state';
@@ -145,6 +145,48 @@ describe('generateFutureDate', () => {
 		const elena = { ...world.characters[0], alive: false, deathDate: { year: 840, season: 'summer' as string, day: 1 } };
 		const futureDate = generateFutureDate(elena, { year: 845, season: 'spring', day: 1 }, world.config.dateSystem);
 		expect(futureDate).toBeNull();
+	});
+});
+
+describe('canGoToPast', () => {
+	it('returns false when character birth date equals current date', () => {
+		const world = createTestWorldState();
+		const elena = world.characters[0];
+		const result = canGoToPast(elena, elena.birthDate, world.config.dateSystem.seasons, world.timeline);
+		expect(result).toBe(false);
+	});
+
+	it('returns false when character has no prior timeline entries', () => {
+		const world = createTestWorldState();
+		const elena = world.characters[0];
+		// Elena born year 820, current date year 845 — plenty of range
+		// But no timeline entries for elena
+		world.timeline = [];
+		const currentDate: GameDate = { year: 845, season: 'spring', day: 1 };
+		const result = canGoToPast(elena, currentDate, world.config.dateSystem.seasons, world.timeline);
+		expect(result).toBe(false);
+	});
+
+	it('returns true when character has prior entries and date range exists', () => {
+		const world = createTestWorldState();
+		const elena = world.characters[0];
+		world.timeline = [
+			{ id: 'e1', date: { year: 844, season: 'spring', day: 1 }, characterId: 'elena_blacksmith', eventTemplateId: 'market_day', choicesMade: [], consequences: [], summary: 'A day' }
+		];
+		const currentDate: GameDate = { year: 845, season: 'spring', day: 1 };
+		const result = canGoToPast(elena, currentDate, world.config.dateSystem.seasons, world.timeline);
+		expect(result).toBe(true);
+	});
+
+	it('returns false when other characters have entries but this one does not', () => {
+		const world = createTestWorldState();
+		const elena = world.characters[0];
+		world.timeline = [
+			{ id: 'e1', date: { year: 844, season: 'spring', day: 1 }, characterId: 'marcus_merchant', eventTemplateId: 'market_day', choicesMade: [], consequences: [], summary: 'A day' }
+		];
+		const currentDate: GameDate = { year: 845, season: 'spring', day: 1 };
+		const result = canGoToPast(elena, currentDate, world.config.dateSystem.seasons, world.timeline);
+		expect(result).toBe(false);
 	});
 });
 
