@@ -178,12 +178,17 @@
 					stateFiles.set(journalPath, journalMd);
 				}
 				const commitMsg = `${currentCharacter?.name ?? 'Unknown'} — ${session?.date.season}, Day ${session?.date.day}, Year ${session?.date.year}`;
+				const authorLabel = ghState.displayName ?? ghState.username;
+				const author = ghState.displayName
+					? { name: ghState.displayName, email: `${ghState.displayName.toLowerCase().replace(/\s+/g, '-')}@players.journal-rpg.local` }
+					: undefined;
 				const result = await saveWithPR(
 					ghState.token, ghState.repoOwner, ghState.repoName,
 					session.characterId,
 					currentCharacter?.name ?? 'Unknown',
 					stateFiles, commitMsg,
-					ghState.username
+					authorLabel,
+					author
 				);
 				if (result.success) {
 					githubState.update(s => ({ ...s, syncStatus: 'synced' }));
