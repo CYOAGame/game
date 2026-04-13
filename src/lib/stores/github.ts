@@ -35,7 +35,19 @@ const DEFAULT_STATE: GitHubState = {
 	pendingChanges: []
 };
 
-export const githubState = writable<GitHubState>(DEFAULT_STATE);
+// Hydrate from localStorage so the session survives page reloads.
+// Without this, the store starts empty on every full page load and
+// the user gets bounced to the landing page even if they have a
+// valid token persisted from a previous session.
+function getInitialState(): GitHubState {
+	const saved = loadGitHubState();
+	if (saved.token) {
+		return { ...DEFAULT_STATE, ...saved } as GitHubState;
+	}
+	return DEFAULT_STATE;
+}
+
+export const githubState = writable<GitHubState>(getInitialState());
 
 export const isOnline = derived(githubState, ($state) =>
 	$state.isAuthenticated && $state.isConnected
