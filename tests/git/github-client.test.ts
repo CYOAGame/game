@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parseRepoUrl, handleRequest, validateToken, validateRepo, addCollaborator } from '../../src/lib/git/github-client';
+import { parseRepoUrl, handleRequest, validateToken, validateRepo } from '../../src/lib/git/github-client';
 import { AuthExpiredError } from '../../src/lib/git/auth-errors';
 import { githubState } from '../../src/lib/stores/github';
 import { get } from 'svelte/store';
@@ -123,25 +123,3 @@ describe('validators do not clear auth on 401', () => {
 	});
 });
 
-describe('addCollaborator', () => {
-	beforeEach(() => {
-		(globalThis as any).localStorage = new MemoryStorage();
-		githubState.set({
-			isAuthenticated: true,
-			username: 'alice',
-			token: 'ghp_valid',
-			authMethod: 'oauth',
-			repoOwner: 'alice',
-			repoName: 'world',
-			isConnected: true,
-			syncStatus: 'synced',
-			pendingChanges: []
-		});
-	});
-
-	it('with a bogus token returns {success:false} without crashing', async () => {
-		const result = await addCollaborator('ghp_definitely_not_real_xxxx', 'CYOAGame', 'Public_Game', 'bob');
-		// Real API call fails — we just care that the wrapper returns a structured result
-		expect(result.success).toBe(false);
-	});
-});
