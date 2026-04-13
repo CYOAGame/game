@@ -27,11 +27,7 @@ jobs:
       - run: npm run build
         env:
           BASE_PATH: '/${{ github.event.repository.name }}'
-          # OAuth configuration — both values are non-sensitive (client ID is
-          # in every authorize URL; worker URL is public), but kept as secrets
-          # so they're managed in one place at repo settings → secrets.
-          PUBLIC_GITHUB_CLIENT_ID: ${{ secrets.PUBLIC_GITHUB_CLIENT_ID }}
-          PUBLIC_OAUTH_WORKER_URL: ${{ secrets.PUBLIC_OAUTH_WORKER_URL }}
+          PUBLIC_GAME_INVITE_CODE: ${{ secrets.PUBLIC_GAME_INVITE_CODE }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build
