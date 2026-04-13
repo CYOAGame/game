@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
+	import { env } from '$env/dynamic/public';
+	const PUBLIC_GAME_INVITE_CODE = env.PUBLIC_GAME_INVITE_CODE ?? '';
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { initializeWorldState, loadWorldState, loadWorldBlocks, saveWorldState, saveWorldBlocks } from '$lib/engine/world-loader';
 	import type { WorldBlocks } from '$lib/engine/world-loader';
@@ -19,6 +21,18 @@
 	let updateAvailable = $state(false);
 
 	let isOffline = $derived(page.url.searchParams.get('offline') === 'true');
+
+	let inviteExpiredError = $derived(
+		page.url.searchParams.get('error') === 'invite-expired'
+			? 'Your invite link has expired or was revoked. Ask the world owner for a new one.'
+			: ''
+	);
+
+	$effect(() => {
+		if (page.url.searchParams.get('error') === 'invite-expired') {
+			authMode = 'unauthenticated';
+		}
+	});
 
 	// Invite link
 	let inviteLink = $state('');
@@ -1744,9 +1758,53 @@
 			{/if}
 
 		{:else if authMode === 'unauthenticated'}
+			{#if inviteExpiredError}
+				<p class="error-msg">{inviteExpiredError}</p>
+			{/if}
+
 			<div class="actions">
-				<a href="{base}/setup" class="btn btn-primary">Set Up Your World</a>
-				<a href="{base}/?offline=true" class="btn btn-secondary">Play Offline</a>
+				<a href="{base}/?offline=true" class="btn btn-primary">Play Offline</a>
+				{#if PUBLIC_GAME_INVITE_CODE}
+					<a href="{base}/invite?code={PUBLIC_GAME_INVITE_CODE}" class="btn btn-primary">
+						Join the Public World
+					</a>
+				{/if}
+			</div>
+
+			<div class="host-section">
+				<h2 class="host-title">Host your own world</h2>
+				<ol class="host-steps">
+					<li>
+						<a href="https://github.com/CYOAGame/ironhaven" target="_blank" rel="noopener noreferrer">
+							Fork CYOAGame/ironhaven
+						</a>
+						on GitHub
+					</li>
+					<li>
+						<a href="https://github.com/settings/personal-access-tokens/new?description=Journal+RPG" target="_blank" rel="noopener noreferrer">
+							Create a fine-grained PAT
+						</a>
+						for your fork with these permissions:
+						<ul class="perm-list">
+							<li><strong>Contents:</strong> Read and write</li>
+							<li><strong>Metadata:</strong> Read (default)</li>
+							<li><strong>Pull requests:</strong> Read and write</li>
+						</ul>
+					</li>
+					<li>
+						<a href="{base}/setup">Connect to the game</a>
+						— paste your PAT and select your fork
+					</li>
+					<li>
+						From the Connect page, click <strong>Generate Invite Link</strong>
+						and share it with friends. They click the link, pick a name, and
+						play — no GitHub account needed.
+					</li>
+				</ol>
+			</div>
+
+			<div class="footer-links-landing">
+				<a href="{base}/setup" class="settings-link">Already set up? Go to Setup</a>
 			</div>
 
 		{:else}
@@ -1942,5 +2000,65 @@
 		opacity: 0.4;
 		font-style: italic;
 		letter-spacing: 0.05em;
+	}
+
+	.error-msg {
+		color: #e09090;
+		background: rgba(180, 60, 60, 0.15);
+		border: 1px solid rgba(180, 60, 60, 0.4);
+		border-radius: 4px;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.85rem;
+		text-align: center;
+		max-width: 480px;
+		width: 100%;
+	}
+
+	.host-section {
+		margin-top: 2rem;
+		text-align: left;
+		max-width: 480px;
+		width: 100%;
+	}
+
+	.host-title {
+		font-size: 1.1rem;
+		color: var(--journal-accent);
+		font-weight: normal;
+		letter-spacing: 0.04em;
+		margin: 0 0 1rem 0;
+	}
+
+	.host-steps {
+		font-size: 0.88rem;
+		line-height: 1.8;
+		padding-left: 1.2rem;
+		margin: 0;
+		opacity: 0.85;
+	}
+
+	.host-steps a {
+		color: var(--journal-accent);
+	}
+
+	.host-steps li {
+		margin-bottom: 0.75rem;
+	}
+
+	.perm-list {
+		margin: 0.4rem 0 0 0;
+		padding-left: 1.2rem;
+		font-size: 0.85rem;
+	}
+
+	.perm-list li {
+		margin-bottom: 0.2rem;
+	}
+
+	.footer-links-landing {
+		margin-top: 1.5rem;
+		display: flex;
+		gap: 1.5rem;
+		justify-content: center;
 	}
 </style>
