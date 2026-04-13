@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { validateToken, validateRepo } from '$lib/git/github-client';
 	import { githubState, saveGitHubState } from '$lib/stores/github';
@@ -17,8 +18,12 @@
 	let validating = $state(false);
 	let tokenInput = $state('');
 	let repoInput = $state('');
+	let expiredMessage = $state('');
 
 	onMount(() => {
+		if (page.url.searchParams.get('error') === 'expired') {
+			expiredMessage = 'Your PAT expired or was revoked. Please create a new one and reconnect.';
+		}
 		const restored = loadWizardState();
 		if (restored) wizState = restored;
 	});
@@ -94,6 +99,9 @@
 
 <div class="wizard-page">
 	<div class="wizard-inner">
+		{#if expiredMessage}
+			<p class="error-msg">{expiredMessage}</p>
+		{/if}
 		<header class="wizard-header">
 			<h1 class="title">Fine-Grained Access Token</h1>
 			<p class="subtitle">Per-repo scope — your token can only touch one world.</p>
@@ -147,7 +155,7 @@
 				<h2 class="section-title">Step 1 of 2 — Confirm your world repo</h2>
 				<p class="section-desc">
 					You must already be a collaborator on this repo. If you aren't, ask the
-					world owner to add you (or use <a href="{base}/login">Login with GitHub</a>).
+					world owner to add you.
 				</p>
 				<input
 					class="field-input"
@@ -185,10 +193,6 @@
 							<li><strong>Contents:</strong> Read and write</li>
 							<li><strong>Metadata:</strong> Read (already required)</li>
 							<li><strong>Pull requests:</strong> Read and write</li>
-							<li>
-								<strong>Administration:</strong> Read and write
-								<em>(optional — only needed if you plan to approve join requests from other players for this repo)</em>
-							</li>
 						</ul>
 					</li>
 					<li>Click <strong>Generate token</strong> and paste it below.</li>
@@ -222,7 +226,7 @@
 		{/if}
 
 		<div class="footer-links">
-			<a href="{base}/login" class="footer-link">Back to login</a>
+			<a href="{base}/" class="footer-link">Back to home</a>
 		</div>
 	</div>
 </div>

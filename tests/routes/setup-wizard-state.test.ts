@@ -6,7 +6,7 @@ import {
 	loadWizardState,
 	clearWizardState,
 	type WizardState
-} from '../../src/routes/login/pat-wizard/wizard-state';
+} from '../../src/routes/setup/wizard-state';
 
 class MemoryStorage {
 	private store = new Map<string, string>();
