@@ -64,7 +64,7 @@
 		if (!ghState.token || !ghState.repoName) return;
 		const code = encodeInviteCode(ghState.repoName, ghState.token);
 		const origin = typeof window !== 'undefined' ? window.location.origin : '';
-		inviteLink = `${origin}/invite?code=${code}`;
+		inviteLink = `${origin}${base}/invite?code=${code}`;
 		inviteLinkCopied = false;
 	}
 
