@@ -11,7 +11,6 @@
 	import { serializeWorldStateToFiles, saveWithPR, queuePendingChanges } from '$lib/git/repo-writer';
 	import { formatJournalEntry, journalFilePath } from '$lib/git/journal-formatter';
 	import { AuthExpiredError } from '$lib/git/auth-errors';
-	import InvitesBadge from '$lib/components/InvitesBadge.svelte';
 
 	// Derived from stores
 	let session = $derived($playSession);
@@ -327,8 +326,7 @@
 		<a href="{base}/" class="back-link">← Home</a>
 		<h1 class="page-title">Journal Entry Complete</h1>
 		<div class="sync-badge-wrap">
-			<InvitesBadge />
-			{#if syncStatus === 'syncing'}
+{#if syncStatus === 'syncing'}
 				<span class="sync-badge sync-syncing">Syncing...</span>
 			{:else if syncStatus === 'synced'}
 				<span class="sync-badge sync-synced">Synced</span>
