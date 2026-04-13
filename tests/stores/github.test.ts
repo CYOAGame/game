@@ -39,7 +39,7 @@ describe('saveGitHubState', () => {
 			isAuthenticated: true,
 			username: 'alice',
 			token: 'ghp_secret',
-			authMethod: 'oauth',
+			authMethod: 'pat',
 			repoOwner: 'alice',
 			repoName: 'world',
 			isConnected: true,
@@ -48,7 +48,7 @@ describe('saveGitHubState', () => {
 		});
 		const loaded = loadGitHubState();
 		expect(loaded.token).toBe('ghp_secret');
-		expect(loaded.authMethod).toBe('oauth');
+		expect(loaded.authMethod).toBe('pat');
 		expect(loaded.username).toBe('alice');
 	});
 });

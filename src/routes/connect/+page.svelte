@@ -60,7 +60,7 @@
 
 	onMount(() => {
 		if (!$githubState.token) {
-			goto(`${base}/login`);
+			goto(`${base}/`);
 			return;
 		}
 		const prefs = loadPlayerPrefs();
@@ -73,7 +73,7 @@
 	async function connectToRepo(owner: string, repo: string) {
 		const tkn = $githubState.token;
 		if (!tkn) {
-			goto(`${base}/login`);
+			goto(`${base}/`);
 			return;
 		}
 		const files = await fetchRepoFiles(tkn, owner, repo);
@@ -112,7 +112,7 @@
 		forkError = '';
 		try {
 			const tkn = $githubState.token;
-			if (!tkn) { goto(`${base}/login`); return; }
+			if (!tkn) { goto(`${base}/`); return; }
 			const result = await forkRepo(tkn, 'CYOAGame', 'ironhaven');
 			if (!result) {
 				forkError = 'Template repo not found or forbidden. If you authenticated with a fine-grained PAT, use the PAT wizard instead.';
@@ -121,7 +121,11 @@
 			await connectToRepo(result.owner, result.repo);
 		} catch (err: any) {
 			if (err instanceof AuthExpiredError) {
-				goto(`${base}/login?error=expired`);
+				if ($githubState.authMethod === 'pat') {
+					goto(`${base}/setup?error=expired`);
+				} else {
+					goto(`${base}/?error=invite-expired`);
+				}
 				return;
 			}
 			forkError = err?.message ?? 'Fork failed. Please try again.';
@@ -137,7 +141,11 @@
 			await connectToRepo('CYOAGame', 'Public_Game');
 		} catch (err: any) {
 			if (err instanceof AuthExpiredError) {
-				goto(`${base}/login?error=expired`);
+				if ($githubState.authMethod === 'pat') {
+					goto(`${base}/setup?error=expired`);
+				} else {
+					goto(`${base}/?error=invite-expired`);
+				}
 				return;
 			}
 			joinError = err?.message ?? 'Failed to connect to public world.';
@@ -157,7 +165,7 @@
 		try {
 			const tkn = $githubState.token;
 			if (!tkn) {
-				goto(`${base}/login`);
+				goto(`${base}/`);
 				return;
 			}
 			const validation = await validateRepo(tkn, parsed.owner, parsed.repo);
@@ -168,7 +176,11 @@
 			await connectToRepo(parsed.owner, parsed.repo);
 		} catch (err: any) {
 			if (err instanceof AuthExpiredError) {
-				goto(`${base}/login?error=expired`);
+				if ($githubState.authMethod === 'pat') {
+					goto(`${base}/setup?error=expired`);
+				} else {
+					goto(`${base}/?error=invite-expired`);
+				}
 				return;
 			}
 			joinError = err?.message ?? 'Failed to connect to repository.';
@@ -184,7 +196,11 @@
 			await connectToRepo(recentOwner, recentRepo);
 		} catch (err: any) {
 			if (err instanceof AuthExpiredError) {
-				goto(`${base}/login?error=expired`);
+				if ($githubState.authMethod === 'pat') {
+					goto(`${base}/setup?error=expired`);
+				} else {
+					goto(`${base}/?error=invite-expired`);
+				}
 				return;
 			}
 			recentError = err?.message ?? 'Failed to load recent world.';
@@ -226,7 +242,7 @@
 		const prefs = loadPlayerPrefs();
 		savePlayerPrefs({ ...prefs, repoOwner: undefined, repoName: undefined });
 		clearAuth();
-		goto(`${base}/login`);
+		goto(`${base}/`);
 	}
 
 </script>

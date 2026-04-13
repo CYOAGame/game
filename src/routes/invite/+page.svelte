@@ -160,7 +160,7 @@
 		{/if}
 
 		<div class="footer-links">
-			<a href="{base}/login" class="footer-link">Login with GitHub instead</a>
+			<a href="{base}/setup" class="footer-link">Set up your own world</a>
 		</div>
 	</div>
 </div>

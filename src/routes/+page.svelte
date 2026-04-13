@@ -29,7 +29,7 @@
 		if (!ghState.token || !ghState.repoName) return;
 		const code = encodeInviteCode(ghState.repoName, ghState.token);
 		const origin = typeof window !== 'undefined' ? window.location.origin : '';
-		inviteLink = `${origin}/invite?code=${code}`;
+		inviteLink = `${origin}${base}/invite?code=${code}`;
 		inviteLinkCopied = false;
 	}
 
@@ -73,14 +73,14 @@
 					return;
 				}
 			} else {
-				// Token invalid — clear it and redirect to login
+				// Token invalid — clear it and show unauthenticated state
 				clearAuth();
-				goto(`${base}/login`);
+				authMode = 'unauthenticated';
 				return;
 			}
 		} else {
-			// Not logged in — redirect to login
-			goto(`${base}/login`);
+			// Not logged in — show unauthenticated state
+			authMode = 'unauthenticated';
 			return;
 		}
 
@@ -1745,7 +1745,7 @@
 
 		{:else if authMode === 'unauthenticated'}
 			<div class="actions">
-				<a href="{base}/login" class="btn btn-primary">Login with GitHub</a>
+				<a href="{base}/setup" class="btn btn-primary">Set Up Your World</a>
 				<a href="{base}/?offline=true" class="btn btn-secondary">Play Offline</a>
 			</div>
 

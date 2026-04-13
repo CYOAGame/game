@@ -97,7 +97,7 @@ describe('validators do not clear auth on 401', () => {
 			isAuthenticated: true,
 			username: 'alice',
 			token: 'ghp_existing',
-			authMethod: 'oauth',
+			authMethod: 'pat',
 			repoOwner: 'alice',
 			repoName: 'world',
 			isConnected: true,
@@ -113,7 +113,7 @@ describe('validators do not clear auth on 401', () => {
 		const result = await validateToken('ghp_definitely_not_real_xxxx');
 		expect(result.valid).toBe(false);
 		expect(get(githubState).token).toBe('ghp_existing');
-		expect(get(githubState).authMethod).toBe('oauth');
+		expect(get(githubState).authMethod).toBe('pat');
 	});
 
 	it('validateRepo with a bogus token returns {valid:false} and leaves the session alone', async () => {

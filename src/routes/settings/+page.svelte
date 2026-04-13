@@ -101,7 +101,11 @@
 			syncNowMessage = `Synced ${pending.length} pending ${pending.length === 1 ? 'batch' : 'batches'}.`;
 		} catch (err: any) {
 			if (err instanceof AuthExpiredError) {
-				goto(`${base}/login?error=expired`);
+				if ($githubState.authMethod === 'pat') {
+					goto(`${base}/setup?error=expired`);
+				} else {
+					goto(`${base}/?error=invite-expired`);
+				}
 				return;
 			}
 			syncNowStatus = 'error';
@@ -262,7 +266,7 @@
 					<p class="test-result test-error">{syncNowMessage}</p>
 				{/if}
 			{:else}
-				<p class="section-desc">Not connected. <a href="{base}/login" class="gh-link">Login with GitHub</a> to sync your world.</p>
+				<p class="section-desc">Not connected. <a href="{base}/setup" class="gh-link">Set up GitHub sync</a> to sync your world.</p>
 			{/if}
 		</section>
 

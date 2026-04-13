@@ -198,7 +198,11 @@
 			} catch (err: any) {
 				if (err instanceof AuthExpiredError) {
 					// clearAuth() was already called inside handleRequest — just bounce.
-					goto(`${base}/login?error=expired`);
+					if ($githubState.authMethod === 'pat') {
+						goto(`${base}/setup?error=expired`);
+					} else {
+						goto(`${base}/?error=invite-expired`);
+					}
 					return updated;
 				}
 				githubState.update(s => ({ ...s, syncStatus: 'error', syncError: err.message }));
