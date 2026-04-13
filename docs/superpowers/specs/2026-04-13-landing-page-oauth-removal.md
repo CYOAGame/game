@@ -83,8 +83,6 @@ Step-by-step tutorial with external links that open in new tabs:
    - Contents: Read and write
    - Metadata: Read (default)
    - Pull requests: Read and write
-   - Administration: Read and write *(optional — needed to approve join
-     requests)*
 3. **Connect to the game** — link to `{base}/setup`. Paste the PAT, select
    the fork repo, connect.
 4. **Invite friends** — from the Connect page, click "Generate Invite Link"
@@ -109,6 +107,8 @@ mid-session.
 
 ### Delete entirely
 
+**OAuth artifacts:**
+
 | Path | What it was |
 |---|---|
 | `tools/oauth-worker.js` | Cloudflare Worker for OAuth token exchange |
@@ -117,6 +117,37 @@ mid-session.
 | `.env.example` | Documented `PUBLIC_GITHUB_CLIENT_ID` + `PUBLIC_OAUTH_WORKER_URL` |
 | `.env` | Local OAuth config (gitignored) |
 | `src/routes/login/+page.svelte` | The login page (OAuth button + PAT link) |
+
+**Join-request system (dead code — replaced by invite-code model):**
+
+With invite links as the sharing mechanism, players never need to be
+GitHub collaborators. The host's token (embedded in the invite link) is
+what grants repo access. The entire join-request approval system is
+therefore unnecessary.
+
+| Path | What it was |
+|---|---|
+| `src/lib/invites/invite-client.ts` | `listJoinRequests`, `approveJoinRequest`, `denyJoinRequest` |
+| `src/lib/invites/invite-url.ts` | `buildJoinRequestUrl` for pre-filled GitHub Issues |
+| `src/lib/components/InvitesBadge.svelte` | Badge showing pending invite count during gameplay |
+| `tests/invites/invite-client.test.ts` | Tests for the join-request orchestration |
+| `tests/invites/invite-url.test.ts` | Tests for the issue URL builder |
+| `docs/superpowers/specs/2026-04-11-owner-approved-invites.md` | The join-request feature spec |
+| `docs/superpowers/plans/2026-04-11-owner-approved-invites.md` | The join-request implementation plan |
+
+**Remove from files (join-request cleanup):**
+
+- `src/lib/git/github-client.ts` — remove `addCollaborator` function
+- `tests/git/github-client.test.ts` — remove `addCollaborator` tests
+- `src/routes/connect/+page.svelte` — remove Pending Invites section,
+  InvitesBadge import, "Not a collaborator yet" panel, "Invite a Player"
+  form, `pollInvites`/`handleApprove`/`startDeny`/`confirmDeny`/
+  `handleDirectInvite` functions and their state variables
+- `src/routes/journal/+page.svelte` — remove `<InvitesBadge />` drop-in
+- `src/routes/session-end/+page.svelte` — remove `<InvitesBadge />` drop-in
+- `src/routes/timeline/+page.svelte` — remove `<InvitesBadge />` drop-in
+- `src/routes/login/pat-wizard/+page.svelte` (becoming `/setup`) — remove
+  the optional "Administration: Read and write" bullet from permissions list
 
 ### Rename
 
