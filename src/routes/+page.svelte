@@ -7,6 +7,7 @@
 	import type { WorldBlocks } from '$lib/engine/world-loader';
 	import { loadPlayerPrefs } from '$lib/stores/player';
 	import { navigationContext } from '$lib/stores/navigation';
+	import { encodeInviteCode } from '$lib/invites/invite-code';
 	import { githubState, clearAuth } from '$lib/stores/github';
 	import { validateToken, checkForkStatus } from '$lib/git/github-client';
 	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles, loadCachedFiles } from '$lib/git/yaml-loader';
@@ -18,6 +19,27 @@
 	let updateAvailable = $state(false);
 
 	let isOffline = $derived(page.url.searchParams.get('offline') === 'true');
+
+	// Invite link
+	let inviteLink = $state('');
+	let inviteLinkCopied = $state(false);
+
+	function generateInviteLink() {
+		const ghState = $githubState;
+		if (!ghState.token || !ghState.repoName) return;
+		const code = encodeInviteCode(ghState.repoName, ghState.token);
+		const origin = typeof window !== 'undefined' ? window.location.origin : '';
+		inviteLink = `${origin}/invite?code=${code}`;
+		inviteLinkCopied = false;
+	}
+
+	async function copyInviteLink() {
+		try {
+			await navigator.clipboard.writeText(inviteLink);
+			inviteLinkCopied = true;
+			setTimeout(() => { inviteLinkCopied = false; }, 2000);
+		} catch {}
+	}
 
 	// React to offline param changes
 	$effect(() => {
@@ -1699,6 +1721,28 @@
 			<a href="{base}/settings" class="settings-link">Settings</a>
 			<a href="{base}/timeline" class="settings-link">World Inspector</a>
 
+			{#if $githubState.repoName}
+				<div class="invite-section">
+					{#if inviteLink}
+						<div class="invite-link-row">
+							<input
+								class="invite-link-input"
+								type="text"
+								readonly
+								value={inviteLink}
+								onclick={(e) => (e.target as HTMLInputElement).select()}
+							/>
+							<button class="btn btn-small" onclick={copyInviteLink}>
+								{inviteLinkCopied ? 'Copied!' : 'Copy'}
+							</button>
+						</div>
+						<p class="invite-hint">Share this with friends. Contains your repo token.</p>
+					{:else}
+						<button class="settings-link" onclick={generateInviteLink}>Invite a Friend</button>
+					{/if}
+				</div>
+			{/if}
+
 		{:else if authMode === 'unauthenticated'}
 			<div class="actions">
 				<a href="{base}/login" class="btn btn-primary">Login with GitHub</a>
@@ -1846,6 +1890,51 @@
 
 	.settings-link:hover {
 		opacity: 0.7;
+	}
+
+	.invite-section {
+		margin-top: 1.25rem;
+	}
+
+	.invite-link-row {
+		display: flex;
+		gap: 0.5rem;
+		max-width: 400px;
+		margin: 0 auto;
+	}
+
+	.invite-link-input {
+		flex: 1;
+		padding: 0.4rem 0.6rem;
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid rgba(74, 74, 58, 0.6);
+		border-radius: 4px;
+		color: var(--session-end-text);
+		font-family: monospace;
+		font-size: 0.72rem;
+	}
+
+	.btn-small {
+		padding: 0.35rem 0.75rem;
+		font-size: 0.78rem;
+		background: rgba(139, 105, 20, 0.2);
+		border: 1px solid rgba(139, 105, 20, 0.5);
+		color: var(--journal-accent);
+		border-radius: 4px;
+		cursor: pointer;
+		font-family: var(--journal-font);
+		transition: background 0.15s;
+	}
+
+	.btn-small:hover {
+		background: rgba(139, 105, 20, 0.35);
+	}
+
+	.invite-hint {
+		font-size: 0.72rem;
+		opacity: 0.35;
+		font-style: italic;
+		margin-top: 0.5rem;
 	}
 
 	.loading-text {
