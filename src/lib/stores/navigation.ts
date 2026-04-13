@@ -8,6 +8,7 @@ export interface NavigationContext {
 	targetDate?: GameDate;
 	timeContext: 'past' | 'present' | 'future';
 	selectedHook?: Hook;
+	forceReroll?: boolean;
 }
 
 export const navigationContext = writable<NavigationContext>({
