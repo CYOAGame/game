@@ -153,6 +153,7 @@
 		</section>
 
 		<div class="footer-links">
+			<a href="{base}/invite" class="footer-link">Have an invite link?</a>
 			<a href="{base}/?offline=true" class="footer-link">Play Offline</a>
 		</div>
 	</div>
