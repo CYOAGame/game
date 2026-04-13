@@ -15,6 +15,7 @@
 		type JoinRequest
 	} from '$lib/invites/invite-client';
 	import { buildJoinRequestUrl } from '$lib/invites/invite-url';
+	import { encodeInviteCode } from '$lib/invites/invite-code';
 	import { onMount } from 'svelte';
 
 	let ghState = $derived($githubState);
@@ -53,6 +54,29 @@
 	let inviteUsername = $state('');
 	let inviteSending = $state(false);
 	let inviteResult = $state<string>('');
+
+	// Invite link state
+	let inviteLink = $state('');
+	let inviteLinkCopied = $state(false);
+
+	function generateInviteLink() {
+		const ghState = $githubState;
+		if (!ghState.token || !ghState.repoName) return;
+		const code = encodeInviteCode(ghState.repoName, ghState.token);
+		const origin = typeof window !== 'undefined' ? window.location.origin : '';
+		inviteLink = `${origin}/invite?code=${code}`;
+		inviteLinkCopied = false;
+	}
+
+	async function copyInviteLink() {
+		try {
+			await navigator.clipboard.writeText(inviteLink);
+			inviteLinkCopied = true;
+			setTimeout(() => { inviteLinkCopied = false; }, 2000);
+		} catch {
+			// Fallback: select the text
+		}
+	}
 
 	// Fork sync state
 	let showSyncPrompt = $state(false);
@@ -479,6 +503,37 @@
 				</div>
 				{#if inviteResult}
 					<p class="invite-result">{inviteResult}</p>
+				{/if}
+			</section>
+		{/if}
+
+		<!-- Generate Invite Link -->
+		{#if $githubState.repoOwner && $githubState.repoName}
+			<section class="section">
+				<h2 class="section-title">Invite Link</h2>
+				<p class="section-desc">
+					Generate a link anyone can use to join your world. No GitHub account needed — they just pick a name and play.
+				</p>
+				{#if inviteLink}
+					<div class="invite-link-display">
+						<input
+							class="field-input invite-link-field"
+							type="text"
+							readonly
+							value={inviteLink}
+							onclick={(e) => (e.target as HTMLInputElement).select()}
+						/>
+						<button class="btn btn-primary" onclick={copyInviteLink}>
+							{inviteLinkCopied ? 'Copied!' : 'Copy'}
+						</button>
+					</div>
+					<p class="section-hint">
+						This link contains your repo access token. Share it only with people you trust.
+					</p>
+				{:else}
+					<button class="btn btn-primary" onclick={generateInviteLink}>
+						Generate Invite Link
+					</button>
 				{/if}
 			</section>
 		{/if}
@@ -978,5 +1033,24 @@
 		opacity: 0.7;
 		margin: 0;
 		line-height: 1.5;
+	}
+
+	.invite-link-display {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.invite-link-field {
+		flex: 1;
+		font-size: 0.8rem;
+		font-family: monospace;
+		cursor: text;
+	}
+
+	.section-hint {
+		font-size: 0.78rem;
+		opacity: 0.5;
+		font-style: italic;
 	}
 </style>
