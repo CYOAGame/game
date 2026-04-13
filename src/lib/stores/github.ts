@@ -35,6 +35,28 @@ const DEFAULT_STATE: GitHubState = {
 	pendingChanges: []
 };
 
+// --- localStorage persistence (defined before store so hydration can use it) ---
+
+const GH_STATE_KEY = 'journal-rpg-github-state';
+
+export function saveGitHubState(state: GitHubState): void {
+	if (typeof localStorage === 'undefined') return;
+	localStorage.setItem(GH_STATE_KEY, JSON.stringify(state));
+}
+
+export function loadGitHubState(): Partial<GitHubState> {
+	if (typeof localStorage === 'undefined') return {};
+	const raw = localStorage.getItem(GH_STATE_KEY);
+	if (!raw) return {};
+	try {
+		return JSON.parse(raw) as Partial<GitHubState>;
+	} catch {
+		return {};
+	}
+}
+
+// --- Store initialization (hydrates from localStorage) ---
+
 // Hydrate from localStorage so the session survives page reloads.
 // Without this, the store starts empty on every full page load and
 // the user gets bounced to the landing page even if they have a
@@ -52,27 +74,6 @@ export const githubState = writable<GitHubState>(getInitialState());
 export const isOnline = derived(githubState, ($state) =>
 	$state.isAuthenticated && $state.isConnected
 );
-
-const GH_STATE_KEY = 'journal-rpg-github-state';
-
-export function saveGitHubState(state: GitHubState): void {
-	if (typeof localStorage === 'undefined') return;
-	// Persist the full state including the token. Previous versions stripped
-	// the token for "safety" but the real token still lived in playerPrefs —
-	// the split was pure footgun.
-	localStorage.setItem(GH_STATE_KEY, JSON.stringify(state));
-}
-
-export function loadGitHubState(): Partial<GitHubState> {
-	if (typeof localStorage === 'undefined') return {};
-	const raw = localStorage.getItem(GH_STATE_KEY);
-	if (!raw) return {};
-	try {
-		return JSON.parse(raw) as Partial<GitHubState>;
-	} catch {
-		return {};
-	}
-}
 
 /**
  * Wipe all auth fields from both the in-memory store and localStorage.
