@@ -3,7 +3,7 @@
 	import { base } from '$app/paths';
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { playSession, narrativeLog as narrativeLogStore } from '$lib/stores/session';
-	import { resolveChoice, getAvailableChoices } from '$lib/engine/choice-resolver';
+	import { resolveChoice, getAvailableChoices, checkPreconditions } from '$lib/engine/choice-resolver';
 	import { collapseAllRoles } from '$lib/engine/collapse';
 	import { selectEvent } from '$lib/engine/event-selector';
 	import { interpolateText } from '$lib/engine/text-generator';
@@ -181,20 +181,33 @@
 		const exhaustionRatio = currentSession.exhaustion / currentSession.maxExhaustion;
 
 		if (event && exhaustionRatio < 0.7) {
-			// Still daylight -- offer to re-enter from the beginning of the event
 			const entryNode = event.nodes[event.entryNodeId];
 			if (entryNode) {
-				// Offer "There is still daylight" as a synthetic choice
-				narrative = [
-					...narrative,
-					{ text: 'There is still daylight. The story is not yet finished.' }
-				];
-				// Provide a single synthetic continue choice rendered via isComplete flag logic
-				// We set a special state so the template can offer a "continue" button
-				const updatedSession = { ...currentSession, currentNodeId: event.entryNodeId };
-				playSession.set(updatedSession);
-				refreshChoicesForNode(entryNode, updatedSession, currentWorld);
-				return;
+				// Check which entry-node choices have already been taken
+				const takenChoiceIds = new Set(
+					currentSession.choiceLog
+						.filter(r => r.nodeId === event.entryNodeId)
+						.map(r => r.choiceId)
+				);
+				const character = currentWorld.characters.find(c => c.id === currentSession.characterId);
+				const untaken = character
+					? entryNode.choices.filter(c =>
+						!takenChoiceIds.has(c.id) &&
+						checkPreconditions(c, character) &&
+						currentSession.exhaustion + c.exhaustionCost <= currentSession.maxExhaustion
+					)
+					: [];
+
+				if (untaken.length > 0) {
+					narrative = [
+						...narrative,
+						{ text: 'There is still daylight. The story is not yet finished.' }
+					];
+					const updatedSession = { ...currentSession, currentNodeId: event.entryNodeId };
+					playSession.set(updatedSession);
+					refreshChoicesForNode(entryNode, updatedSession, currentWorld);
+					return;
+				}
 			}
 		}
 
