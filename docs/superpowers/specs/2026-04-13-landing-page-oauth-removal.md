@@ -65,11 +65,15 @@ Two side-by-side CTAs:
 
 1. **Play Offline** — links to `/?offline=true` (existing flow, works
    today, zero friction)
-2. **Join the Public World** — links to a hardcoded invite URL:
-   `{base}/invite?code=<PUBLIC_GAME_INVITE_CODE>`. The code is generated
-   once by Joe from `/connect`'s "Generate Invite Link" button and pasted
-   into the source as a constant. It contains Joe's PAT scoped to
-   `Public_Game`, so it only needs to be regenerated if the PAT is rotated.
+2. **Join the Public World** — links to
+   `{base}/invite?code=${PUBLIC_GAME_INVITE_CODE}` where the code is read
+   from `$env/static/public`. The code value is stored as a GitHub Actions
+   secret (not in source) and baked into the JS bundle at build time. Joe
+   generates it once from `/connect`'s "Generate Invite Link" button,
+   copies just the `code=` value, and adds it as the repo secret
+   `PUBLIC_GAME_INVITE_CODE`. Regenerate only if the underlying PAT is
+   rotated. The code is visible in the deployed JS bundle (the browser
+   needs it to build the link), but it's kept out of the git history.
 
 ### Section 4: Host your own world
 
@@ -198,6 +202,9 @@ Update all imports and internal references after the rename.
 **`.github/workflows/deploy.yml`**
 - Remove `PUBLIC_GITHUB_CLIENT_ID` and `PUBLIC_OAUTH_WORKER_URL` from the
   build `env:` block.
+- Add `PUBLIC_GAME_INVITE_CODE: ${{ secrets.PUBLIC_GAME_INVITE_CODE }}`
+  to the build `env:` block (replaces the two OAuth vars with one invite
+  var).
 
 ### Don't delete (Joe handles manually, out-of-band)
 
