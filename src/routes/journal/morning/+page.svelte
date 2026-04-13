@@ -99,10 +99,24 @@
 		const date = $navigationContext.targetDate ?? $playSession?.date;
 		const season = date?.season ?? updatedState.config.dateSystem.seasons[0];
 
+		// If forceReroll, randomize tension scores so hooks differ from last time
+		let stateForHooks = updatedState;
+		if ($navigationContext.forceReroll) {
+			const randomizedStorylines = { ...(updatedState.storylineStates ?? {}) };
+			for (const [name, slState] of Object.entries(randomizedStorylines)) {
+				const offset = -20 + Math.floor(Math.random() * 41); // -20 to +20
+				randomizedStorylines[name] = {
+					...slState,
+					tension: Math.max(0, Math.min(100, slState.tension + offset))
+				};
+			}
+			stateForHooks = { ...updatedState, storylineStates: randomizedStorylines };
+		}
+
 		// Generate hooks
 		const generated = generateHooks(
 			savedBlocks.events,
-			updatedState,
+			stateForHooks,
 			season,
 			charId,
 			savedBlocks.questlines
@@ -110,6 +124,11 @@
 
 		hooks = generated;
 		isLoading = false;
+
+		// Clear forceReroll so it doesn't persist to future navigations
+		if ($navigationContext.forceReroll) {
+			navigationContext.update(ctx => ({ ...ctx, forceReroll: false }));
+		}
 	});
 
 	function selectHook(hook: Hook) {
