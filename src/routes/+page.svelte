@@ -6,6 +6,7 @@
 	import { initializeWorldState, loadWorldState, loadWorldBlocks, saveWorldState, saveWorldBlocks } from '$lib/engine/world-loader';
 	import type { WorldBlocks } from '$lib/engine/world-loader';
 	import { loadPlayerPrefs } from '$lib/stores/player';
+	import { navigationContext } from '$lib/stores/navigation';
 	import { githubState, clearAuth } from '$lib/stores/github';
 	import { validateToken, checkForkStatus } from '$lib/git/github-client';
 	import { fetchRepoFiles, buildWorldBlocksFromFiles, buildWorldStateFromFiles, cacheFiles, loadCachedFiles } from '$lib/git/yaml-loader';
@@ -1664,6 +1665,7 @@
 		if (state && blocks) {
 			worldState.set(state);
 			worldBlocks.set(blocks);
+			navigationContext.set({ mode: 'new', timeContext: 'present' });
 			goto(`${base}/journal/setup`);
 		}
 	}

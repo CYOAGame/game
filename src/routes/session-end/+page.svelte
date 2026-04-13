@@ -260,6 +260,7 @@
 	async function handleSaveAndMenu() {
 		await saveSession();
 		playSession.set(null);
+		navigationContext.set({ mode: 'new', timeContext: 'present' });
 		goto(`${base}/`);
 	}
 
@@ -289,6 +290,7 @@
 			worldState.set(saved);
 		}
 		playSession.set(null);
+		navigationContext.set({ mode: 'new', timeContext: 'present' });
 		goto(`${base}/`);
 	}
 </script>
