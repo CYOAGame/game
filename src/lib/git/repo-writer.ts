@@ -167,7 +167,8 @@ export async function commitToBranch(
 	repo: string,
 	characterId: string,
 	files: Map<string, string>,
-	message: string
+	message: string,
+	author?: { name: string; email: string }
 ): Promise<{ success: boolean; sha?: string; error?: string }> {
 	try {
 		return await handleRequest(async () => {
@@ -195,7 +196,8 @@ export async function commitToBranch(
 			});
 
 			const { data: newCommit } = await octokit.rest.git.createCommit({
-				owner, repo, message, tree: newTree.sha, parents: [branch.sha]
+				owner, repo, message, tree: newTree.sha, parents: [branch.sha],
+				...(author ? { author } : {})
 			});
 
 			await octokit.rest.git.updateRef({
@@ -360,7 +362,8 @@ export async function saveWithPR(
 	characterName: string,
 	files: Map<string, string>,
 	commitMessage: string,
-	username?: string
+	username?: string,
+	author?: { name: string; email: string }
 ): Promise<{ success: boolean; sha?: string; prNumber?: number; error?: string }> {
 	// 0. Ensure branch exists
 	const branch = await ensureBranch(token, owner, repo, characterId);
@@ -371,7 +374,7 @@ export async function saveWithPR(
 
 	// 2. Commit to character branch
 	const finalMessage = username ? `[${username}] ${commitMessage}` : commitMessage;
-	const commitResult = await commitToBranch(token, owner, repo, characterId, files, finalMessage);
+	const commitResult = await commitToBranch(token, owner, repo, characterId, files, finalMessage, author);
 	if (!commitResult.success) {
 		return { success: false, error: commitResult.error };
 	}
