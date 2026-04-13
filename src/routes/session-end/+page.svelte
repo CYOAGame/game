@@ -239,6 +239,7 @@
 		if (!session || !currentCharacter || !state) return;
 		await saveSession();
 		const pastDate = generatePastDate(currentCharacter, session.date, state.config.dateSystem, state.timeline);
+		if (!pastDate) return;
 		navigationContext.set({
 			mode: 'pre-selected',
 			characterId: session.characterId,
@@ -292,6 +293,27 @@
 	}
 </script>
 
+{#snippet narrativeBody()}
+	{#if narrativeLog && narrativeLog.length > 0}
+		{#each narrativeLog as entry}
+			{#if entry.choiceLabel}
+				<blockquote>{entry.text}</blockquote>
+			{:else}
+				<p>{entry.text}</p>
+			{/if}
+		{/each}
+	{:else if session && session.choiceLog.length > 0}
+		{#each session.choiceLog as record}
+			{#if record.narrativeText}
+				<p>{record.narrativeText}</p>
+			{/if}
+			<blockquote>{record.text}</blockquote>
+		{/each}
+	{:else if !session?.isDead}
+		<p class="quiet-day">A quiet day passed without incident.</p>
+	{/if}
+{/snippet}
+
 <div class="session-end-page">
 	<!-- Header -->
 	<header class="session-end-header">
@@ -321,24 +343,7 @@
 			</div>
 			<div class="narrative-panel-label">Full journal entry</div>
 			<div class="narrative-text">
-				{#if narrativeLog && narrativeLog.length > 0}
-					{#each narrativeLog as entry}
-						{#if entry.choiceLabel}
-							<blockquote>{entry.text}</blockquote>
-						{:else}
-							<p>{entry.text}</p>
-						{/if}
-					{/each}
-				{:else if session && session.choiceLog.length > 0}
-					{#each session.choiceLog as record}
-						{#if record.narrativeText}
-							<p>{record.narrativeText}</p>
-						{/if}
-						<blockquote>{record.text}</blockquote>
-					{/each}
-				{:else if !session?.isDead}
-					<p class="quiet-day">A quiet day passed without incident.</p>
-				{/if}
+				{@render narrativeBody()}
 				{#if session?.isDead}
 					<div class="death-notice">
 						<span class="death-icon">✦</span>
@@ -405,7 +410,7 @@
 					<div class="section-label">Keep this day and...</div>
 					<div class="keep-grid">
 						<button class="keep-btn" disabled={!canGoToFuture} onclick={handleForward}>
-							<span class="keep-icon">→</span>
+							<span class="keep-icon" aria-hidden="true">→</span>
 							<span class="keep-label">Forward in Time</span>
 							<span class="keep-sub">
 								{#if session?.isDead || (currentCharacter && !currentCharacter.alive)}
@@ -416,17 +421,17 @@
 							</span>
 						</button>
 						<button class="keep-btn" disabled={!canGoToPastDerived} onclick={handleBackward}>
-							<span class="keep-icon">←</span>
+							<span class="keep-icon" aria-hidden="true">←</span>
 							<span class="keep-label">Backward in Time</span>
 							<span class="keep-sub">Revisit an earlier moment</span>
 						</button>
 						<button class="keep-btn" onclick={handleSomeoneElse}>
-							<span class="keep-icon">⇄</span>
+							<span class="keep-icon" aria-hidden="true">⇄</span>
 							<span class="keep-label">Play Another Character</span>
 							<span class="keep-sub">Different eyes</span>
 						</button>
 						<button class="keep-btn" onclick={handleSaveAndMenu}>
-							<span class="keep-icon">⌂</span>
+							<span class="keep-icon" aria-hidden="true">⌂</span>
 							<span class="keep-label">Save & Menu</span>
 							<span class="keep-sub">Done for now</span>
 						</button>
@@ -454,30 +459,13 @@
 			<!-- Mobile-only: expandable narrative -->
 			<div class="divider mobile-narrative-divider"></div>
 			<div class="mobile-narrative">
-				<button class="narrative-toggle" onclick={() => narrativeExpanded = !narrativeExpanded} class:open={narrativeExpanded}>
+				<button class="narrative-toggle" onclick={() => narrativeExpanded = !narrativeExpanded} class:open={narrativeExpanded} aria-expanded={narrativeExpanded} aria-controls="mobile-narrative-body">
 					<span class="narrative-toggle-label">📖 Read the full journal entry</span>
-					<span class="narrative-toggle-arrow">▼</span>
+					<span class="narrative-toggle-arrow" aria-hidden="true">▼</span>
 				</button>
 				{#if narrativeExpanded}
-					<div class="narrative-expand-body">
-						{#if narrativeLog && narrativeLog.length > 0}
-							{#each narrativeLog as entry}
-								{#if entry.choiceLabel}
-									<blockquote>{entry.text}</blockquote>
-								{:else}
-									<p>{entry.text}</p>
-								{/if}
-							{/each}
-						{:else if session && session.choiceLog.length > 0}
-							{#each session.choiceLog as record}
-								{#if record.narrativeText}
-									<p>{record.narrativeText}</p>
-								{/if}
-								<blockquote>{record.text}</blockquote>
-							{/each}
-						{:else if !session?.isDead}
-							<p class="quiet-day">A quiet day passed without incident.</p>
-						{/if}
+					<div class="narrative-expand-body" id="mobile-narrative-body">
+						{@render narrativeBody()}
 					</div>
 				{/if}
 			</div>
