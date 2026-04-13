@@ -4,10 +4,9 @@
 	import { worldState, worldBlocks } from '$lib/stores/world';
 	import { playSession, narrativeLog as narrativeLogStore } from '$lib/stores/session';
 	import { saveWorldState, loadWorldState } from '$lib/engine/world-loader';
-	import { generatePastDate, generateFutureDate, suggestCharacters } from '$lib/engine/timeline';
+	import { generatePastDate, generateFutureDate, suggestCharacters, canGoToPast } from '$lib/engine/timeline';
 	import { navigationContext } from '$lib/stores/navigation';
 	import type { CharacterSuggestion } from '$lib/engine/timeline';
-	import { compareDates } from '$lib/types/state';
 	import { githubState } from '$lib/stores/github';
 	import { serializeWorldStateToFiles, saveWithPR, queuePendingChanges } from '$lib/git/repo-writer';
 	import { formatJournalEntry, journalFilePath } from '$lib/git/journal-formatter';
@@ -29,10 +28,11 @@
 	// Timeline navigation state
 	let showingSuggestions = $state(false);
 	let suggestions = $state<CharacterSuggestion[]>([]);
+	let narrativeExpanded = $state(false);
 
-	let canGoToPast = $derived(
+	let canGoToPastDerived = $derived(
 		session && currentCharacter && state
-			? compareDates(currentCharacter.birthDate, session.date, state.config.dateSystem.seasons) < 0
+			? canGoToPast(currentCharacter, session.date, state.config.dateSystem.seasons, state.timeline)
 			: false
 	);
 
@@ -204,45 +204,23 @@
 		return updated;
 	}
 
-	async function handleSave() {
-		await saveSession();
-		playSession.set(null);
-		goto(`${base}/journal`);
-	}
-
-	function handleDiscardReplay() {
-		const saved = loadWorldState();
-		if (saved) {
-			worldState.set(saved);
+	function selectSuggestion(suggestion: CharacterSuggestion) {
+		if (suggestion.type === 'new') {
+			navigationContext.set({ mode: 'new', timeContext: 'present' });
+		} else {
+			navigationContext.set({
+				mode: 'pre-selected',
+				characterId: suggestion.characterId!,
+				timeContext: 'present'
+			});
 		}
-		playSession.set(null);
-		goto(`${base}/journal`);
-	}
-
-	function handleDiscardMenu() {
-		const saved = loadWorldState();
-		if (saved) {
-			worldState.set(saved);
-		}
-		playSession.set(null);
-		goto(`${base}/`);
-	}
-
-	async function handlePast() {
-		if (!session || !currentCharacter || !state) return;
-		await saveSession();
-		const pastDate = generatePastDate(currentCharacter, session.date, state.config.dateSystem, state.timeline);
-		navigationContext.set({
-			mode: 'pre-selected',
-			characterId: session.characterId,
-			targetDate: pastDate,
-			timeContext: 'past'
-		});
 		playSession.set(null);
 		goto(`${base}/journal/setup`);
 	}
 
-	async function handleFuture() {
+	// --- Keep this day actions (all auto-save) ---
+
+	async function handleForward() {
 		if (!session || !currentCharacter || !state) return;
 		await saveSession();
 		const futureDate = generateFutureDate(currentCharacter, session.date, state.config.dateSystem, state.timeline);
@@ -257,6 +235,20 @@
 		goto(`${base}/journal/setup`);
 	}
 
+	async function handleBackward() {
+		if (!session || !currentCharacter || !state) return;
+		await saveSession();
+		const pastDate = generatePastDate(currentCharacter, session.date, state.config.dateSystem, state.timeline);
+		navigationContext.set({
+			mode: 'pre-selected',
+			characterId: session.characterId,
+			targetDate: pastDate,
+			timeContext: 'past'
+		});
+		playSession.set(null);
+		goto(`${base}/journal/setup`);
+	}
+
 	async function handleSomeoneElse() {
 		if (!state || !session) return;
 		await saveSession();
@@ -264,18 +256,39 @@
 		showingSuggestions = true;
 	}
 
-	function selectSuggestion(suggestion: CharacterSuggestion) {
-		if (suggestion.type === 'new') {
-			navigationContext.set({ mode: 'new', timeContext: 'present' });
-		} else {
+	async function handleSaveAndMenu() {
+		await saveSession();
+		playSession.set(null);
+		goto(`${base}/`);
+	}
+
+	// --- Toss this day actions (no save) ---
+
+	function handleUndoRedo() {
+		const saved = loadWorldState();
+		if (saved) {
+			worldState.set(saved);
+		}
+		if (session) {
 			navigationContext.set({
 				mode: 'pre-selected',
-				characterId: suggestion.characterId!,
-				timeContext: 'present'
+				characterId: session.characterId,
+				targetDate: session.date,
+				timeContext: session.timeContext,
+				forceReroll: true
 			});
 		}
 		playSession.set(null);
-		goto(`${base}/journal/setup`);
+		goto(`${base}/journal/morning`);
+	}
+
+	function handleDiscardMenu() {
+		const saved = loadWorldState();
+		if (saved) {
+			worldState.set(saved);
+		}
+		playSession.set(null);
+		goto(`${base}/`);
 	}
 </script>
 
@@ -298,72 +311,83 @@
 		</div>
 	</header>
 
-	<!-- Main content -->
-	<main class="session-end-main">
-		<div class="entry-card">
-			<!-- Character & date -->
-			<div class="entry-identity">
-				<h2 class="character-name">
-					{currentCharacter?.name ?? 'Unknown Character'}
-				</h2>
+	<!-- Desktop: split panel / Mobile: single column -->
+	<div class="session-end-body">
+		<!-- Narrative panel (desktop: left side, mobile: collapsible at bottom) -->
+		<div class="narrative-panel">
+			<div class="narrative-panel-header">
+				<h2 class="char-name">{currentCharacter?.name ?? 'Unknown Character'}</h2>
+				<span class="entry-date">{dateDisplay()}</span>
+			</div>
+			<div class="narrative-panel-label">Full journal entry</div>
+			<div class="narrative-text">
+				{#if narrativeLog && narrativeLog.length > 0}
+					{#each narrativeLog as entry}
+						{#if entry.choiceLabel}
+							<blockquote>{entry.text}</blockquote>
+						{:else}
+							<p>{entry.text}</p>
+						{/if}
+					{/each}
+				{:else if session && session.choiceLog.length > 0}
+					{#each session.choiceLog as record}
+						{#if record.narrativeText}
+							<p>{record.narrativeText}</p>
+						{/if}
+						<blockquote>{record.text}</blockquote>
+					{/each}
+				{:else if !session?.isDead}
+					<p class="quiet-day">A quiet day passed without incident.</p>
+				{/if}
+				{#if session?.isDead}
+					<div class="death-notice">
+						<span class="death-icon">✦</span>
+						<span>{currentCharacter?.name ?? 'This character'} did not survive this day.</span>
+					</div>
+				{/if}
+			</div>
+		</div>
+
+		<!-- Action sidebar (desktop: right side, mobile: main content area) -->
+		<div class="action-sidebar">
+			<!-- Mobile-only: compact identity + summary -->
+			<div class="mobile-identity">
+				<h2 class="char-name">{currentCharacter?.name ?? 'Unknown Character'}</h2>
 				<span class="entry-date">{dateDisplay()}</span>
 			</div>
 
-			<!-- Summary section -->
-			<section class="summary-section">
-				<h3 class="section-label">What happened</h3>
+			<div class="mobile-summary">
+				<div class="section-label">What happened</div>
 				<p class="summary-text">{sessionSummary()}</p>
-
 				{#if session?.isDead}
 					<div class="death-notice">
 						<span class="death-icon">✦</span>
 						<span>This character's story has ended.</span>
 					</div>
 				{/if}
-			</section>
+			</div>
 
-			<!-- Choice tags -->
+			<!-- Tags (both layouts) -->
 			{#if choiceTags().length > 0}
-				<section class="tags-section">
-					<h3 class="section-label">This entry touched on</h3>
+				<div class="tags-section">
+					<div class="section-label">This entry touched on</div>
 					<div class="tags-list">
 						{#each choiceTags() as tag}
 							<span class="tag">{tag}</span>
 						{/each}
 					</div>
-				</section>
+				</div>
 			{/if}
 
 			<div class="divider"></div>
 
-			<!-- This entry: action buttons -->
-			<section class="actions-section">
-				<h3 class="section-label">This entry</h3>
-				<div class="action-buttons">
-					<button class="btn btn-save" onclick={handleSave}>
-						<span class="btn-title">Save</span>
-						<span class="btn-sub">Keep changes and continue</span>
-					</button>
-					<button class="btn btn-discard" onclick={handleDiscardReplay}>
-						<span class="btn-title">Discard &amp; Replay</span>
-						<span class="btn-sub">Reload last save, redo this entry</span>
-					</button>
-					<button class="btn btn-discard-menu" onclick={handleDiscardMenu}>
-						<span class="btn-title">Discard &amp; Return to Menu</span>
-						<span class="btn-sub">Reload last save, go to menu</span>
-					</button>
-				</div>
-			</section>
-
-			<div class="divider"></div>
-
-			<!-- Next entry: timeline navigation -->
-			<section class="actions-section next-entry-section">
-				<h3 class="section-label">Next entry</h3>
-				{#if showingSuggestions}
+			<!-- Keep this day -->
+			{#if showingSuggestions}
+				<div class="suggestions-section">
+					<div class="section-label">Play as...</div>
 					<div class="suggestions">
 						{#each suggestions as suggestion}
-							<button class="btn suggestion-card" onclick={() => selectSuggestion(suggestion)}>
+							<button class="suggestion-card" onclick={() => selectSuggestion(suggestion)}>
 								<span class="btn-title">
 									{#if suggestion.type === 'new'}
 										Someone New
@@ -375,37 +399,90 @@
 							</button>
 						{/each}
 					</div>
-				{:else}
-					<div class="action-buttons next-entry-buttons">
-						<button
-							class="btn btn-next-entry"
-							disabled={!canGoToPast}
-							onclick={handlePast}
-						>
-							<span class="btn-title">The Past</span>
-							<span class="btn-sub">Revisit an earlier moment</span>
+				</div>
+			{:else}
+				<div class="keep-section">
+					<div class="section-label">Keep this day and...</div>
+					<div class="keep-grid">
+						<button class="keep-btn" disabled={!canGoToFuture} onclick={handleForward}>
+							<span class="keep-icon">→</span>
+							<span class="keep-label">Forward in Time</span>
+							<span class="keep-sub">
+								{#if session?.isDead || (currentCharacter && !currentCharacter.alive)}
+									Story has ended
+								{:else}
+									Continue later
+								{/if}
+							</span>
 						</button>
-						<button
-							class="btn btn-next-entry"
-							disabled={!canGoToFuture}
-							onclick={handleFuture}
-						>
-							<span class="btn-title">The Future</span>
-							{#if session?.isDead || (currentCharacter && !currentCharacter.alive)}
-								<span class="btn-sub">This character's story has ended</span>
-							{:else}
-								<span class="btn-sub">Jump forward in time</span>
-							{/if}
+						<button class="keep-btn" disabled={!canGoToPastDerived} onclick={handleBackward}>
+							<span class="keep-icon">←</span>
+							<span class="keep-label">Backward in Time</span>
+							<span class="keep-sub">Revisit an earlier moment</span>
 						</button>
-						<button class="btn btn-next-entry btn-someone-else" onclick={handleSomeoneElse}>
-							<span class="btn-title">Someone Else</span>
-							<span class="btn-sub">Play a different character</span>
+						<button class="keep-btn" onclick={handleSomeoneElse}>
+							<span class="keep-icon">⇄</span>
+							<span class="keep-label">Play Another Character</span>
+							<span class="keep-sub">Different eyes</span>
+						</button>
+						<button class="keep-btn" onclick={handleSaveAndMenu}>
+							<span class="keep-icon">⌂</span>
+							<span class="keep-label">Save & Menu</span>
+							<span class="keep-sub">Done for now</span>
 						</button>
 					</div>
+				</div>
+			{/if}
+
+			<div class="divider"></div>
+
+			<!-- Toss this day -->
+			<div class="toss-section">
+				<div class="section-label">Toss this day</div>
+				<div class="toss-row">
+					<button class="toss-btn" onclick={handleUndoRedo}>
+						<span class="toss-label">Undo & Redo</span>
+						<span class="toss-sub">Re-roll hooks, start fresh</span>
+					</button>
+					<button class="toss-btn" onclick={handleDiscardMenu}>
+						<span class="toss-label">Discard & Menu</span>
+						<span class="toss-sub">Throw away, go home</span>
+					</button>
+				</div>
+			</div>
+
+			<!-- Mobile-only: expandable narrative -->
+			<div class="divider mobile-narrative-divider"></div>
+			<div class="mobile-narrative">
+				<button class="narrative-toggle" onclick={() => narrativeExpanded = !narrativeExpanded} class:open={narrativeExpanded}>
+					<span class="narrative-toggle-label">📖 Read the full journal entry</span>
+					<span class="narrative-toggle-arrow">▼</span>
+				</button>
+				{#if narrativeExpanded}
+					<div class="narrative-expand-body">
+						{#if narrativeLog && narrativeLog.length > 0}
+							{#each narrativeLog as entry}
+								{#if entry.choiceLabel}
+									<blockquote>{entry.text}</blockquote>
+								{:else}
+									<p>{entry.text}</p>
+								{/if}
+							{/each}
+						{:else if session && session.choiceLog.length > 0}
+							{#each session.choiceLog as record}
+								{#if record.narrativeText}
+									<p>{record.narrativeText}</p>
+								{/if}
+								<blockquote>{record.text}</blockquote>
+							{/each}
+						{:else if !session?.isDead}
+							<p class="quiet-day">A quiet day passed without incident.</p>
+						{/if}
+					</div>
 				{/if}
-			</section>
+			</div>
 		</div>
-	</main>
+	</div>
 </div>
 
 <style>
@@ -418,7 +495,7 @@
 		flex-direction: column;
 	}
 
-	/* Header */
+	/* ── Header ── */
 	.session-end-header {
 		display: flex;
 		align-items: center;
@@ -427,7 +504,6 @@
 		border-bottom: 1px solid var(--session-end-border);
 		background: rgba(255, 255, 255, 0.03);
 	}
-
 	.back-link {
 		color: var(--session-end-text);
 		text-decoration: none;
@@ -436,11 +512,7 @@
 		transition: opacity 0.15s;
 		flex: 1;
 	}
-
-	.back-link:hover {
-		opacity: 1;
-	}
-
+	.back-link:hover { opacity: 1; }
 	.page-title {
 		font-size: 1.1rem;
 		font-weight: normal;
@@ -450,7 +522,6 @@
 		text-align: center;
 		flex: 2;
 	}
-
 	.sync-badge-wrap {
 		flex: 1;
 		display: flex;
@@ -458,7 +529,6 @@
 		justify-content: flex-end;
 		gap: 0.5rem;
 	}
-
 	.sync-badge {
 		font-size: 0.72rem;
 		letter-spacing: 0.06em;
@@ -467,286 +537,304 @@
 		border-radius: 3px;
 		border: 1px solid transparent;
 	}
+	.sync-syncing { color: #9ab8e8; border-color: rgba(90, 140, 210, 0.4); background: rgba(90, 140, 210, 0.1); }
+	.sync-synced { color: #8ecf8e; border-color: rgba(80, 160, 80, 0.4); background: rgba(80, 160, 80, 0.1); }
+	.sync-pending { color: #d4b96a; border-color: rgba(180, 140, 60, 0.4); background: rgba(180, 140, 60, 0.1); }
+	.sync-error { color: #e09090; border-color: rgba(180, 60, 60, 0.4); background: rgba(180, 60, 60, 0.1); }
 
-	.sync-syncing {
-		color: #9ab8e8;
-		border-color: rgba(90, 140, 210, 0.4);
-		background: rgba(90, 140, 210, 0.1);
-	}
-
-	.sync-synced {
-		color: #8ecf8e;
-		border-color: rgba(80, 160, 80, 0.4);
-		background: rgba(80, 160, 80, 0.1);
-	}
-
-	.sync-pending {
-		color: #d4b96a;
-		border-color: rgba(180, 140, 60, 0.4);
-		background: rgba(180, 140, 60, 0.1);
-	}
-
-	.sync-error {
-		color: #e09090;
-		border-color: rgba(180, 60, 60, 0.4);
-		background: rgba(180, 60, 60, 0.1);
-	}
-
-	/* Main area */
-	.session-end-main {
+	/* ── Split layout (desktop) ── */
+	.session-end-body {
 		flex: 1;
 		display: flex;
-		justify-content: center;
-		align-items: flex-start;
-		padding: 2.5rem 1rem;
+		height: calc(100vh - 52px);
+		overflow: hidden;
 	}
 
-	.entry-card {
-		width: 100%;
-		max-width: 640px;
-		background: var(--session-end-card-bg);
-		border: 1px solid var(--session-end-border);
-		border-radius: 6px;
-		padding: 2.5rem 2.5rem 2rem;
-		display: flex;
-		flex-direction: column;
-		gap: 1.75rem;
+	/* ── Narrative panel (left) ── */
+	.narrative-panel {
+		flex: 1;
+		overflow-y: auto;
+		padding: 2rem 2.5rem;
+		border-right: 1px solid var(--session-end-border);
+		background: rgba(0, 0, 0, 0.08);
 	}
-
-	/* Identity block */
-	.entry-identity {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-
-	.character-name {
-		font-size: 1.8rem;
-		font-weight: normal;
-		color: var(--journal-accent);
-		letter-spacing: 0.02em;
-	}
-
-	.entry-date {
-		font-size: 0.85rem;
-		opacity: 0.5;
-		letter-spacing: 0.06em;
-	}
-
-	/* Section labels */
-	.section-label {
-		font-size: 0.75rem;
+	.narrative-panel-header { margin-bottom: 1.5rem; }
+	.narrative-panel-label {
+		font-size: 0.72rem;
 		text-transform: uppercase;
 		letter-spacing: 0.12em;
-		opacity: 0.45;
+		opacity: 0.4;
+		margin-bottom: 1rem;
+	}
+	.char-name {
+		font-size: 1.6rem;
 		font-weight: normal;
-		margin-bottom: 0.6rem;
+		color: var(--journal-accent);
+		margin-bottom: 0.25rem;
 	}
-
-	/* Summary */
-	.summary-section {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
+	.entry-date {
+		font-size: 0.82rem;
+		opacity: 0.45;
+		letter-spacing: 0.06em;
 	}
-
-	.summary-text {
-		font-size: 1rem;
-		line-height: 1.75;
+	.narrative-text {
+		line-height: 1.85;
+		font-size: 0.95rem;
+	}
+	.narrative-text p {
+		margin-bottom: 1.1rem;
 		opacity: 0.85;
 	}
+	.narrative-text blockquote {
+		border-left: 2px solid var(--journal-accent);
+		padding-left: 1rem;
+		margin: 0.85rem 0;
+		color: var(--journal-accent);
+		opacity: 0.9;
+		font-style: italic;
+	}
+	.quiet-day { font-style: italic; opacity: 0.6; }
 
+	/* ── Action sidebar (right) ── */
+	.action-sidebar {
+		width: 320px;
+		min-width: 280px;
+		overflow-y: auto;
+		padding: 2rem 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+	}
+
+	/* ── Shared elements ── */
+	.section-label {
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		opacity: 0.4;
+		margin-bottom: 0.5rem;
+	}
+	.divider { height: 1px; background: var(--session-end-border); opacity: 0.5; }
+	.tags-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+	.tag {
+		padding: 0.2rem 0.55rem;
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid var(--session-end-border);
+		border-radius: 20px;
+		font-size: 0.72rem;
+		opacity: 0.7;
+	}
 	.death-notice {
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
-		font-size: 0.9rem;
+		font-size: 0.85rem;
 		color: #c07060;
-		margin-top: 0.25rem;
+		margin-top: 0.5rem;
 		padding: 0.5rem 0.75rem;
 		border: 1px solid rgba(192, 112, 96, 0.3);
 		border-radius: 4px;
 		background: rgba(192, 112, 96, 0.07);
 	}
+	.death-icon { font-size: 0.7rem; opacity: 0.75; }
 
-	.death-icon {
-		font-size: 0.7rem;
-		opacity: 0.75;
-	}
-
-	/* Tags */
-	.tags-section {
-		display: flex;
-		flex-direction: column;
+	/* ── Keep grid ── */
+	.keep-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
 		gap: 0.5rem;
 	}
-
-	.tags-list {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-
-	.tag {
-		padding: 0.25rem 0.65rem;
-		background: rgba(255, 255, 255, 0.07);
-		border: 1px solid var(--session-end-border);
-		border-radius: 20px;
-		font-size: 0.8rem;
-		opacity: 0.75;
-		letter-spacing: 0.03em;
-	}
-
-	/* Divider */
-	.divider {
-		height: 1px;
-		background: var(--session-end-border);
-		opacity: 0.5;
-	}
-
-	/* Action sections */
-	.actions-section {
+	.keep-btn {
 		display: flex;
 		flex-direction: column;
-	}
-
-	.action-buttons {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	/* Buttons */
-	.btn {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		padding: 0.75rem 1rem;
-		background: rgba(255, 255, 255, 0.04);
-		border: 1px solid var(--session-end-border);
-		border-radius: 4px;
+		align-items: center;
+		text-align: center;
+		padding: 1rem 0.65rem;
+		background: rgba(139, 105, 20, 0.06);
+		border: 1px solid rgba(139, 105, 20, 0.3);
+		border-radius: 5px;
 		cursor: pointer;
-		font-family: var(--journal-font);
 		color: var(--session-end-text);
-		text-align: left;
+		font-family: var(--journal-font);
+		gap: 0.35rem;
 		transition: background 0.15s, border-color 0.15s, transform 0.1s;
-		gap: 0.15rem;
-		width: 100%;
 	}
-
-	.btn:hover:not(:disabled) {
-		background: rgba(255, 255, 255, 0.08);
-		border-color: rgba(255, 255, 255, 0.2);
-		transform: translateX(2px);
+	.keep-btn:hover:not(:disabled) {
+		background: rgba(139, 105, 20, 0.15);
+		border-color: var(--journal-accent);
+		transform: translateY(-1px);
 	}
-
-	.btn:active:not(:disabled) {
-		transform: translateX(0);
-	}
-
-	.btn-title {
-		font-size: 0.95rem;
-		letter-spacing: 0.02em;
-	}
-
-	.btn-sub {
-		font-size: 0.75rem;
-		opacity: 0.45;
-	}
-
-	/* Save button — highlighted */
-	.btn-save {
-		border-color: rgba(139, 105, 20, 0.5);
-		background: rgba(139, 105, 20, 0.1);
-	}
-
-	.btn-save:hover {
-		background: rgba(139, 105, 20, 0.2) !important;
-		border-color: var(--journal-accent) !important;
-	}
-
-	.btn-save .btn-title {
-		color: var(--journal-accent);
-	}
-
-	/* Discard buttons */
-	.btn-discard,
-	.btn-discard-menu {
-		opacity: 0.75;
-	}
-
-	.btn-discard:hover,
-	.btn-discard-menu:hover {
-		opacity: 1;
-	}
-
-	/* Next entry buttons */
-	.next-entry-buttons {
-		flex-direction: row;
-		flex-wrap: wrap;
-	}
-
-	.btn-next-entry {
-		flex: 1;
-		min-width: 140px;
-	}
-
-	.btn-next-entry:disabled {
+	.keep-btn:disabled {
 		opacity: 0.3;
 		cursor: not-allowed;
-		background: rgba(255, 255, 255, 0.02);
-		border-color: rgba(74, 74, 58, 0.4);
-		transform: none;
+	}
+	.keep-icon {
+		font-size: 1.3rem;
+		color: var(--journal-accent);
+		opacity: 0.8;
+	}
+	.keep-label {
+		font-size: 0.82rem;
+		color: var(--journal-accent);
+	}
+	.keep-sub {
+		font-size: 0.68rem;
+		opacity: 0.45;
+		line-height: 1.4;
 	}
 
-	/* Someone else — always enabled */
-	.btn-someone-else {
+	/* ── Toss row ── */
+	.toss-row {
+		display: flex;
+		gap: 0.6rem;
+	}
+	.toss-btn {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		padding: 0.55rem 0.5rem;
+		background: transparent;
+		border: 1px solid rgba(74, 74, 58, 0.35);
+		border-radius: 4px;
+		cursor: pointer;
+		color: var(--session-end-text);
+		font-family: var(--journal-font);
+		opacity: 0.5;
+		gap: 0.1rem;
+		transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+	}
+	.toss-btn:hover {
 		opacity: 1;
+		background: rgba(180, 60, 60, 0.08);
+		border-color: rgba(180, 60, 60, 0.3);
 	}
+	.toss-label { font-size: 0.8rem; }
+	.toss-sub { font-size: 0.65rem; opacity: 0.5; }
 
-	/* Suggestions list */
+	/* ── Suggestions ── */
 	.suggestions {
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
 	}
-
 	.suggestion-card {
-		border-color: rgba(139, 105, 20, 0.3);
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		padding: 0.75rem 1rem;
+		background: rgba(139, 105, 20, 0.06);
+		border: 1px solid rgba(139, 105, 20, 0.3);
+		border-radius: 4px;
+		cursor: pointer;
+		font-family: var(--journal-font);
+		color: var(--session-end-text);
+		text-align: left;
+		gap: 0.15rem;
+		width: 100%;
+		transition: background 0.15s, border-color 0.15s;
 	}
-
 	.suggestion-card:hover {
-		border-color: var(--journal-accent) !important;
-		background: rgba(139, 105, 20, 0.08) !important;
+		border-color: var(--journal-accent);
+		background: rgba(139, 105, 20, 0.12);
+	}
+	.btn-title { font-size: 0.9rem; color: var(--journal-accent); }
+	.btn-sub { font-size: 0.72rem; opacity: 0.45; }
+
+	/* ── Summary text (mobile) ── */
+	.summary-text {
+		font-size: 0.92rem;
+		line-height: 1.7;
+		opacity: 0.8;
 	}
 
-	/* Responsive */
-	@media (max-width: 520px) {
-		.entry-card {
+	/* ── Mobile narrative toggle ── */
+	.narrative-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		cursor: pointer;
+		padding: 0.6rem 0.85rem;
+		background: rgba(255, 255, 255, 0.02);
+		border: 1px solid rgba(74, 74, 58, 0.4);
+		border-radius: 4px;
+		font-family: var(--journal-font);
+		color: var(--session-end-text);
+		transition: background 0.15s;
+	}
+	.narrative-toggle:hover { background: rgba(255, 255, 255, 0.05); }
+	.narrative-toggle-label { font-size: 0.85rem; opacity: 0.6; }
+	.narrative-toggle-arrow {
+		font-size: 0.75rem;
+		opacity: 0.4;
+		transition: transform 0.2s;
+	}
+	.narrative-toggle.open .narrative-toggle-arrow { transform: rotate(180deg); }
+
+	.narrative-expand-body {
+		padding: 1.25rem;
+		border: 1px solid rgba(74, 74, 58, 0.3);
+		border-top: none;
+		border-radius: 0 0 4px 4px;
+		background: rgba(0, 0, 0, 0.12);
+		line-height: 1.8;
+		font-size: 0.95rem;
+		max-height: 400px;
+		overflow-y: auto;
+	}
+	.narrative-expand-body p { margin-bottom: 1rem; opacity: 0.85; }
+	.narrative-expand-body blockquote {
+		border-left: 2px solid var(--journal-accent);
+		padding-left: 1rem;
+		margin: 0.75rem 0;
+		color: var(--journal-accent);
+		opacity: 0.9;
+		font-style: italic;
+	}
+
+	/* ── Desktop: hide mobile-only elements ── */
+	.mobile-identity,
+	.mobile-summary,
+	.mobile-narrative,
+	.mobile-narrative-divider { display: none; }
+
+	/* ── Mobile (<768px): single column, decision-first ── */
+	@media (max-width: 768px) {
+		.session-end-body {
+			flex-direction: column;
+			height: auto;
+			overflow: visible;
+		}
+		.narrative-panel { display: none; }
+		.action-sidebar {
+			width: 100%;
+			min-width: unset;
 			padding: 1.75rem 1.25rem;
 		}
-
-		.next-entry-buttons {
-			flex-direction: column;
-		}
+		.mobile-identity,
+		.mobile-summary,
+		.mobile-narrative,
+		.mobile-narrative-divider { display: block; }
+		.mobile-identity { margin-bottom: 0.5rem; }
+		.char-name { font-size: 1.5rem; }
 	}
 
+	/* ── Small phones ── */
 	@media (max-width: 480px) {
 		.session-end-header {
 			flex-wrap: wrap;
 			gap: 0.25rem;
 			padding: 0.5rem 1rem;
 		}
-
 		.page-title {
 			flex: none;
 			width: 100%;
 			order: -1;
 			font-size: 0.85rem;
 		}
-
-		.entry-card {
-			padding: 1.5rem 1.25rem;
-		}
+		.keep-grid { gap: 0.4rem; }
+		.keep-btn { padding: 0.75rem 0.5rem; }
 	}
 </style>
